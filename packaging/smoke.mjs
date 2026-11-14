@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { MINI_MODEL } from "../mini/model.mjs";
 import { checkProjectVersion } from "./version.mjs";
@@ -106,6 +106,43 @@ try {
   assert.equal(selfTest.sqlite, "ok");
   assert.equal(selfTest.discord, "ok");
 
+  // Bridge Mini discards speech.cpp's own output, so a failed start says only
+  // that speech.cpp stopped. These print what speech.cpp itself reports.
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const builds = (
+    process.platform === "win32" ? ["speech-vulkan", "speech"] : ["speech"]
+  ).map((name) => join(root, "runtime/speech", `${name}${suffix}`));
+  const speech = (program, args) => {
+    const run = spawnSync(program, args, {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: 180000,
+    });
+    const text = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim().split(/\r?\n/);
+    console.log(
+      `$ ${program.split(/[\\/]/).at(-1)} ${args.join(" ")}\n` +
+        `${text.slice(-40).join("\n")}\n` +
+        `(exit ${run.status ?? run.signal ?? run.error?.code})`,
+    );
+  };
+  for (const program of builds) speech(program, ["devices"]);
+  const diagnose = () => {
+    const wav = join(temporary, "diagnose.wav");
+    for (const program of builds)
+      speech(program, [
+        "tts",
+        model,
+        "--voice",
+        "none",
+        "--steps",
+        "4",
+        "-o",
+        wav,
+        "テスト",
+      ]);
+  };
+
   // A start with a token Discord rejects: the bundled model must load from
   // the package before the login is attempted, and the exit must be clean.
   const [port, ttsPort] = [await freePort(), await freePort()];
@@ -124,6 +161,7 @@ try {
   const timer = setTimeout(() => child.kill("SIGKILL"), 300000);
   const code = await new Promise((done) => child.once("close", done));
   clearTimeout(timer);
+  if (/内蔵TTSを開始できませんでした/.test(output)) diagnose();
   assert.match(output, /音声モデルを読み込んでいます/, output);
   assert.match(output, /Discord Botにログインできませんでした/, output);
   assert.doesNotMatch(output, /内蔵TTSを開始できませんでした/, output);
