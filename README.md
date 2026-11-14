@@ -38,7 +38,7 @@ VTT（オンラインセッションツール）のチャットにキャラと�
    - 同じ「Bot」の画面にある「Privileged Gateway Intents」は、すべてオフのままにします。
 3. Botをあなたのサーバーに呼びます。サーバー管理者権限が必要なので権限がない場合は招待URLを管理者に開いてもらって下さい。
    - 控えておいた「Application ID」を、次のURLの <Application ID> の部分に入れて開きます。
-   - https://discord.com/oauth2/authorize?client_id=<Application ID>&scope=bot&permissions=3247104
+   - `https://discord.com/oauth2/authorize?client_id=<Application ID>&scope=bot&permissions=3247104`
    - このURLは、2.で起動したときにも画面に表示されます。
 
 ### 2. ダウンロードして起動する
