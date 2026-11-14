@@ -1,0 +1,2 @@
+# packaging/version.mjs rewrites this with JSON.stringify.
+collector/manifest.json

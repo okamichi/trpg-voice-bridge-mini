@@ -1,0 +1,12 @@
+{
+  "speech": {
+    "repository": "nyosegawa/speech.cpp",
+    "commit": "03555100287c118b41d1b475044e5ab1e07baa8c",
+    "sha256": "853b52b4e6fb936704204daa04a34c2fd58ec9269f001cc366ac364882c1e5f7"
+  },
+  "ggml": {
+    "repository": "nyosegawa/ggml",
+    "commit": "e1a9ac12edbb57402618fd6936598603f5ee6266",
+    "sha256": "9a1e31aa7414969117b3aae8f4edd709fd8c8551ba51eeb1652b7666d2f3f3dd"
+  }
+}

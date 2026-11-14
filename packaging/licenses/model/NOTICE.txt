@@ -1,0 +1,41 @@
+Voice model bundled with TRPG Voice Bridge Mini
+
+File:        runtime/models/Irodori-TTS-859M-v4.1-Q4_K.gguf
+SHA-256:     a1c174f4552817e84dd6a2a020bc3d0589fd7f30d0c3db53ad04a1e69fb5dbfd
+Source:      https://huggingface.co/sakasegawa/Irodori-TTS-v4.1-Small-GGUF
+Revision:    66fe2cde1973fd44e7202fbe36df722103958188
+Model:       Irodori-TTS-v4.1-Small by Aratako
+             https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small
+Codec:       Semantic-DACVAE-Japanese-32dim by Aratako, in the same file,
+             fine-tuned from Meta's facebook/dacvae-watermarked
+Encoder:     the model card names sbintuitions/modernbert-ja-310m by
+             SB Intuitions as its pretrained Japanese text and caption encoder
+             https://huggingface.co/sbintuitions/modernbert-ja-310m
+
+The file is distributed unmodified. The source repository releases it under
+the MIT License (LICENSE-MIT) and includes the Apache License 2.0
+(LICENSE-APACHE-2.0) for the codec's upstream. Both files here are copies from
+the revision above:
+
+  LICENSE-MIT          sha256 dfd47cc99fd79cced8e0cab04ed81f70b3d4f2f475a75746b341671bd3991c00
+  LICENSE-APACHE-2.0   sha256 cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+
+sbintuitions/modernbert-ja-310m is released under the MIT License. Its
+license is a copy from revision 77675fc96a7e445e982e2ba90246b816efc74ec6:
+
+  LICENSE-modernbert-ja-310m   sha256 284353c80e0d52c06e97af62fd40e4dd1d253fa28f5d1e756121ea1d5d441509
+
+In addition to the license terms, the model card asks users:
+
+  - not to clone or impersonate the voice of any individual (voice actors,
+    celebrities, public figures and others) without their explicit consent;
+  - not to generate deepfakes or synthetic speech intended to mislead others
+    or spread misinformation.
+
+It also notes that a generated voice may coincidentally resemble a real
+person, and that the developers assume no liability for misuse.
+
+Citation requested by the model card:
+
+  Chihiro Arata, "Irodori-TTS: A Flow Matching-based Text-to-Speech Model with
+  Emoji-driven Style Control", 2026.

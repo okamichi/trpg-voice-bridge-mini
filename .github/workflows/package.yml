@@ -1,0 +1,96 @@
+name: Packages
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+          - os: windows-2025
+            platform: win32
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: packaging/node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            discord/package-lock.json
+      - name: Check native build target
+        run: node -e "if(process.platform !== '${{ matrix.platform }}' || process.arch !== '${{ matrix.arch }}') process.exit(1)"
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix discord ci --no-audit --no-fund
+      - name: Check Bridge Mini, Collector and release tag versions
+        run: npm run version:check
+      # The Windows package also carries a Vulkan build of speech.cpp; its SDK
+      # version follows speech.cpp's own release workflow.
+      - name: Install the Vulkan SDK
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        env:
+          VULKAN_VERSION: 1.4.357.0
+        run: |
+          curl.exe -fsSL -o "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
+      - name: Build pinned speech.cpp and process supervisor
+        run: npm run package:speech
+      - run: npm test
+      # The voice model is pinned by size and SHA-256 in mini/model.mjs, so
+      # one cached copy serves both systems.
+      - name: Restore the voice model
+        uses: actions/cache@v6.1.0
+        with:
+          path: .packaging/model
+          key: mini-model-${{ hashFiles('mini/model.mjs') }}
+          enableCrossOsArchive: true
+      - name: Fetch and verify the voice model
+        run: npm run package:model
+      - name: Build SEA with the model and audit package privacy
+        run: npm run package:build
+      - name: Test extracted package without Node on PATH
+        run: npm run package:smoke
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: trpg-voice-bridge-mini-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create draft prerelease for review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --draft --prerelease --title "$GITHUB_REF_NAME" --notes "Discord only, with the voice model inside (about 0.9 GB each). macOS packages are not notarized; Windows packages are unsigned. See README.txt in the package for startup instructions."

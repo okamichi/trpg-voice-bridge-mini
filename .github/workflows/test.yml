@@ -1,0 +1,28 @@
+name: Tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: packaging/node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            discord/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm --prefix discord ci --no-audit --no-fund
+      - name: Check formatting
+        run: npm run format:check
+      - run: npm test

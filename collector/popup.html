@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+  <meta charset="utf-8" /><title>TRPG Voice Collector</title
+  ><link rel="stylesheet" href="popup.css" />
+  <h1>卓のチャットを接続</h1>
+  <p id="detected">現在のタブを確認しています…</p>
+  <form id="settings">
+    <label
+      >取得方式<select name="mode">
+        <option value="auto">自動判別</option>
+        <option value="fly">ユドナリウム with Fly</option>
+        <option value="udonarium">ユドナリウム（従来方式）</option>
+        <option value="fvtt">FVTT</option>
+        <option value="ccfolia">ココフォリア</option>
+      </select></label
+    >
+    <label id="roomField" hidden
+      >部屋の識別名<input
+        name="contextId"
+        placeholder="卓ごとに同じ名前を使ってください"
+    /></label>
+    <label id="channelField" hidden
+      >対象チャット<input name="channel" placeholder="例：MainTab"
+    /></label>
+    <label id="channelSelectField" hidden
+      >対象チャット<select name="channelChoice"></select
+    ></label>
+    <details>
+      <summary>Bridge接続先</summary>
+      <label
+        >Bridge URL<input name="bridge" value="http://127.0.0.1:8090" required
+      /></label>
+    </details>
+    <p>
+      ココフォリアはメインを初期選択します。公開タブを一覧から変更できます。ユドナリウムでは読み上げたい公開チャットを表示してください。
+    </p>
+    <button id="connect">このタブを接続</button
+    ><button type="button" id="stop">取得を停止</button>
+  </form>
+  <p id="status" role="status"></p>
+  <script src="popup.js"></script>
+</html>
