@@ -4,6 +4,8 @@ VTT（オンラインセッションツール）のチャットにキャラと�
 
 [TRPG Voice Bridge](https://github.com/okamichi/trpg-voice-bridge) の機能を、Discordで使う分だけに絞った簡易版です。音声を作るプログラムnyosegawa/speech.cppと音声モデルIrodori-TTS-v4.1-SmallのGGUF版が入っているので、ダウンロードして起動し、Discord Botのトークンを入力すれば使えます。設定画面はなく、操作はすべてDiscordで行います。
 
+![TRPG Voice Bridgeのしくみ](./info-mini.png)
+
 ## できること
 
 - ココフォリア・FVTT・ユドナリウムのチャットの発言を、キャラごとの声で読み上げる

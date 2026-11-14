@@ -18,11 +18,11 @@ const GUILD = "11111111111111111",
 
 async function setup(
   t,
-  {
-    tts = { status: "ready", error: "" },
-    dataDir = mkdtempSync(join(tmpdir(), "mini-app-")),
-  } = {},
+  { tts = { status: "ready", error: "" }, dataDir: shared } = {},
 ) {
+  // A test that starts Mini twice on one directory passes it to the second
+  // setup; only the setup that made the directory removes it.
+  const dataDir = shared ?? mkdtempSync(join(tmpdir(), "mini-app-"));
   const fake = fakeDiscord(),
     posts = [],
     registered = [],
@@ -87,7 +87,15 @@ async function setup(
   const close = () => (closed ??= mini.close());
   t.after(async () => {
     await close();
-    rmSync(dataDir, { recursive: true, force: true });
+    // Windows cannot remove a file another Mini still has open. A failed
+    // removal must not stop the hooks that close the other Minis, or their
+    // servers keep the test process alive.
+    if (!shared)
+      try {
+        rmSync(dataDir, { recursive: true, force: true });
+      } catch {
+        /* the temporary directory is left behind */
+      }
   });
   const interaction = (extra = {}) => ({
     guildId: GUILD,
@@ -621,6 +629,8 @@ test("names left without a voice are cleared at the next start", async (t) => {
     again.mini.app.store.config.characters.map((c) => c.displayName),
     [NAME],
   );
+  // Close it here, before the first setup's hook removes the directory.
+  await again.close();
 });
 
 test("the voice limit is explained without pointing at an admin page", async (t) => {

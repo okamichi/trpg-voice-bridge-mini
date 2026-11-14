@@ -55,7 +55,10 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
       - name: Build pinned speech.cpp and process supervisor
         run: npm run package:speech
+      # A test that leaves a server open keeps the process alive; fail it soon
+      # instead of at the job's limit.
       - run: npm test
+        timeout-minutes: 15
       # The voice model is pinned by size and SHA-256 in mini/model.mjs, so
       # one cached copy serves both systems.
       - name: Restore the voice model

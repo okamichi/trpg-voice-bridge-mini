@@ -26,3 +26,4 @@ jobs:
       - name: Check formatting
         run: npm run format:check
       - run: npm test
+        timeout-minutes: 15
