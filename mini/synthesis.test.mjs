@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { MINI_STEPS } from "./model.mjs";
-import { sentences, shapeSynthesis } from "./synthesis.mjs";
+import { joinShortSentences, sentences, shapeSynthesis } from "./synthesis.mjs";
 
 const URL_ = "http://127.0.0.1:18088/v1/audio/speech";
 const RATE = 48000;
-// A stand-in for speech.cpp: a plain sentence takes one second; with a
-// reference or a description it takes three unless the request says how long.
+// A stand-in for speech.cpp: a plain line takes one second; with a reference
+// or a description it takes three unless the request says how long.
 function speech() {
   const requests = [];
   const fetchImpl = async (url, init) => {
@@ -62,72 +62,84 @@ test("sentences are split where speech.cpp ends one, keeping marks with their se
   assert.deepEqual(sentences("……。"), ["……。"]);
 });
 
-test("a short sentence in a reference voice is measured, then spoken at that length", async () => {
-  const { requests, say } = speech();
-  const { seconds, response } = await say({ input: "こんにちは" });
-  assert.equal(seconds, 1.15);
-  assert.equal(response.headers.get("X-Sample-Rate"), String(RATE));
-  assert.equal(requests.length, 2);
-  const [probe, spoken] = requests;
-  assert.equal(probe.voice, "none");
-  assert.equal(probe.steps, 4);
-  assert.ok(!("instructions" in probe));
-  assert.ok(!("cfg_scale_speaker" in probe));
-  assert.equal(spoken.instructions, "落ち着いた声");
-  assert.equal(spoken.voice, "chat-1");
-  assert.equal(spoken.steps, MINI_STEPS);
-  assert.equal(spoken.seconds, 1.15);
-  assert.equal(spoken.cfg_scale_speaker, 5);
+test("a 「。」 next to a short sentence becomes 「、」; others stay", () => {
+  const long1 = "古い地図によれば、この森を抜けた先に遺跡があるはずです。";
+  const long2 = "日が暮れる前に、野営の準備をすべて済ませておきましょう。";
+  for (const [line, joined] of [
+    ["待って。誰か来る。", "待って、誰か来る。"],
+    ["よし。行こう。", "よし、行こう。"],
+    [`${long1}急ぎましょう。`, `${long1.slice(0, -1)}、急ぎましょう。`],
+    [`待って。${long1}`, `待って、${long1}`],
+    [`${long1}${long2}`, `${long1}${long2}`],
+    ["静かに。", "静かに。"],
+    ["😠ふざけるな！⏸️……もういい。", "😠ふざけるな！⏸️……もういい。"],
+    ["大丈夫？怪我はない？", "大丈夫？怪我はない？"],
+    ["「待て。」行くぞ。", "「待て。」行くぞ。"],
+    ["こんにちは", "こんにちは"],
+  ])
+    assert.equal(joinShortSentences(line), joined, line);
 });
 
-test("a line of several sentences is spoken one sentence at a time", async () => {
+test("a short line in a reference voice is measured once, then spoken at that length", async () => {
+  const { requests, say } = speech();
+  const { seconds, response } = await say({ input: "待って。誰か来る。" });
+  assert.equal(seconds, 1);
+  assert.equal(response.headers.get("X-Sample-Rate"), String(RATE));
+  assert.equal(requests.length, 2);
+  const [probe, line] = requests;
+  assert.equal(probe.input, "待って、誰か来る。");
+  assert.equal(probe.voice, "none");
+  assert.equal(probe.steps, 4);
+  assert.equal(probe.response_format, "pcm");
+  assert.ok(!("instructions" in probe));
+  assert.ok(!("cfg_scale_speaker" in probe));
+  assert.equal(line.input, "待って、誰か来る。");
+  assert.equal(line.instructions, "落ち着いた声");
+  assert.equal(line.voice, "chat-1");
+  assert.equal(line.steps, MINI_STEPS);
+  assert.equal(line.seconds, 1);
+  assert.equal(line.cfg_scale_speaker, 5);
+});
+
+test("a longer line is sent once, with its short sentences joined and no length given", async () => {
   const { requests, say } = speech();
   const long = "古い地図によれば、この森を抜けた先に遺跡があるはずです。";
   const { seconds } = await say({ input: `待って。${long}誰か来る。` });
   assert.deepEqual(
-    requests.map((r) => [r.input, r.voice, r.seconds]),
+    requests.map((r) => [r.input, r.voice, r.steps, r.seconds]),
     [
-      ["待って。", "none", undefined],
-      ["待って。", "chat-1", 1.15],
-      [long, "chat-1", undefined],
-      ["誰か来る。", "none", undefined],
-      ["誰か来る。", "chat-1", 1.15],
+      [
+        `待って、${long.slice(0, -1)}、誰か来る。`,
+        "chat-1",
+        MINI_STEPS,
+        undefined,
+      ],
     ],
   );
-  assert.ok(Math.abs(seconds - (1.15 + 0.3 + 3 + 0.3 + 1.15)) < 0.001);
+  assert.equal(seconds, 3);
 });
 
 test("a described voice without a reference is shaped too: the greeting and a new voice's sample", async () => {
   const { requests, say } = speech();
-  const { seconds } = await say({
-    input: "こんにちは。これからこの声でお話しします。",
-    voice: "none",
-  });
+  await say({ input: "こんにちは。", voice: "none" });
   assert.deepEqual(
     requests.map((r) => [r.input, r.voice, r.instructions, r.seconds]),
     [
       ["こんにちは。", "none", undefined, undefined],
-      ["こんにちは。", "none", "落ち着いた声", 1.15],
-      ["これからこの声でお話しします。", "none", undefined, undefined],
-      ["これからこの声でお話しします。", "none", "落ち着いた声", 1.15],
+      ["こんにちは。", "none", "落ち着いた声", 1],
     ],
   );
-  assert.ok(Math.abs(seconds - (1.15 + 0.3 + 1.15)) < 0.001);
 });
 
-test("longer sentences and plain voices go through as one request", async () => {
+test("plain voices and lines with a length given go through unchanged", async () => {
   const { requests, say } = speech();
-  const long =
-    "古い地図によれば、この森を抜けた先に遺跡があるはずです。日が暮れる前に野営の準備を済ませておきましょう。";
-  await say({ input: long });
-  await say({ input: "こんにちは", voice: "none", instructions: "" });
-  await say({ input: "こんにちは", seconds: 2 });
+  await say({ input: "待って。誰か来る。", voice: "none", instructions: "" });
+  await say({ input: "待って。誰か来る。", seconds: 2 });
   assert.deepEqual(
     requests.map((r) => [r.input, r.voice, r.steps, r.seconds]),
     [
-      [long, "chat-1", MINI_STEPS, undefined],
-      ["こんにちは", "none", MINI_STEPS, undefined],
-      ["こんにちは", "chat-1", MINI_STEPS, 2],
+      ["待って。誰か来る。", "none", MINI_STEPS, undefined],
+      ["待って。誰か来る。", "chat-1", MINI_STEPS, 2],
     ],
   );
 });
@@ -138,6 +150,11 @@ test("a refusal from speech.cpp is passed on for Engine to handle", async () => 
   assert.equal(
     (await say({ input: "待って。失敗する長い文章がここに続いています。" }))
       .response.status,
+    400,
+  );
+  assert.equal(
+    (await say({ input: "失敗。", voice: "none", instructions: "" })).response
+      .status,
     400,
   );
 });

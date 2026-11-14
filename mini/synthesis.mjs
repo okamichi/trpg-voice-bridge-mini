@@ -1,15 +1,12 @@
 import { MINI_STEPS } from "./model.mjs";
 
-// Given a reference voice or a voice description, the model often plans two
-// to four times too long an utterance for a short sentence, and fills the
-// time by saying it again or with noise. Sentences up to this many spoken
-// characters are measured first.
+// speech.cpp speaks a line one sentence at a time. Given a reference voice or
+// a voice description, the model often plans two to four times too long an
+// utterance for a sentence of up to about this many spoken characters, and
+// fills the time by saying it again or with noise.
 const SHORT = 16;
 // Steps do not change the planned length, so the measuring pass is cheap.
 const PROBE_STEPS = 4;
-// A reference voice may speak a little slower than the model's own pace.
-const PACE = 1.15;
-const PAUSE_SECONDS = 0.3;
 
 const spoken = (text) => (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
 
@@ -26,13 +23,29 @@ export function sentences(text) {
   return parts;
 }
 
+// A 「。」 between two sentences becomes 「、」 when either sentence is short, so
+// speech.cpp speaks them as one longer sentence. A 「。」 between two long
+// sentences, a line's last 「。」, 「！」, 「？」 and a 「。」 inside brackets stay.
+export function joinShortSentences(text) {
+  const parts = sentences(text);
+  return parts
+    .map((part, i) =>
+      i < parts.length - 1 &&
+      part.endsWith("。") &&
+      (spoken(part) <= SHORT || spoken(parts[i + 1]) <= SHORT)
+        ? `${part.slice(0, -1)}、`
+        : part,
+    )
+    .join("");
+}
+
 // Wraps the fetch that reaches speech.cpp. Every synthesis carries Mini's
 // step count, since Mini has no screen for choosing it and voices brought
-// from Bridge may hold other values. A line in a designed voice that has a
-// short sentence is spoken sentence by sentence: each short one is first
-// generated plainly, without the reference or the description, to learn its
-// length, then generated in the voice with that length given. The greeting
-// and the sample a new voice is made from go the same way.
+// from Bridge may hold other values. For a designed voice, short sentences
+// are joined first; a line that is still short is generated once plainly,
+// without the reference or the description, to learn its length, and then in
+// the voice with that length given. The greeting and the sample a new voice
+// is made from go the same way.
 export function shapeSynthesis(fetchImpl, steps = MINI_STEPS) {
   return async (input, init) => {
     if (
@@ -49,60 +62,39 @@ export function shapeSynthesis(fetchImpl, steps = MINI_STEPS) {
         ...init,
         body: JSON.stringify({ ...body, steps, ...fields }),
       });
-    const parts =
-      (body.voice !== "none" || body.instructions) &&
-      body.seconds === undefined &&
-      body.response_format === "pcm" &&
-      typeof body.input === "string"
-        ? sentences(body.input)
-        : [];
-    if (!parts.some((part) => spoken(part) <= SHORT)) return request({});
+    if (
+      (body.voice === "none" && !body.instructions) ||
+      body.seconds !== undefined ||
+      typeof body.input !== "string"
+    )
+      return request({});
+    const text = joinShortSentences(body.input);
+    if (spoken(text) > SHORT) return request({ input: text });
 
-    let rate;
-    const chunks = [];
-    for (const part of parts) {
-      const fields = { input: part };
-      if (spoken(part) <= SHORT) {
-        const {
-          cfg_scale_speaker,
-          cfg_scale_instructions,
-          instructions,
-          ...plain
-        } = body;
-        const probe = await fetchImpl(input, {
-          ...init,
-          body: JSON.stringify({
-            ...plain,
-            input: part,
-            voice: "none",
-            steps: Math.min(PROBE_STEPS, steps),
-          }),
-        });
-        if (!probe.ok) return probe;
-        const probeRate = Number(probe.headers.get("X-Sample-Rate"));
-        const bytes = (await probe.arrayBuffer()).byteLength;
-        if (probeRate > 0 && bytes > 0)
-          fields.seconds = Math.min(
-            30,
-            Math.max(0.5, (bytes / (probeRate * 2)) * PACE),
-          );
-      }
-      const response = await request(fields);
-      if (!response.ok) return response;
-      const sampleRate = Number(response.headers.get("X-Sample-Rate"));
-      // Engine rejects the audio when the rate is missing or changes.
-      if (rate && sampleRate !== rate) return request({});
-      rate = sampleRate;
-      if (chunks.length)
-        chunks.push(Buffer.alloc(Math.round(rate * PAUSE_SECONDS) * 2));
-      chunks.push(Buffer.from(await response.arrayBuffer()));
-    }
-    return new Response(Buffer.concat(chunks), {
-      status: 200,
-      headers: {
-        "Content-Type": "audio/pcm",
-        "X-Sample-Rate": String(rate),
-      },
+    const {
+      cfg_scale_speaker,
+      cfg_scale_instructions,
+      instructions,
+      ...plain
+    } = body;
+    const probe = await fetchImpl(input, {
+      ...init,
+      body: JSON.stringify({
+        ...plain,
+        input: text,
+        voice: "none",
+        steps: Math.min(PROBE_STEPS, steps),
+        response_format: "pcm",
+      }),
+    });
+    if (!probe.ok) return probe;
+    const rate = Number(probe.headers.get("X-Sample-Rate"));
+    const bytes = (await probe.arrayBuffer()).byteLength;
+    return request({
+      input: text,
+      ...(rate > 0 && bytes > 0
+        ? { seconds: Math.min(30, Math.max(0.5, bytes / (rate * 2))) }
+        : {}),
     });
   };
 }
