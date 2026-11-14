@@ -10,13 +10,16 @@ import { VoiceTidy, forgetVoiceless } from "./voices.mjs";
 import { shapeSynthesis } from "./synthesis.mjs";
 
 // A new data directory starts from this. Chat registration is always on, and
-// there is no Player to publish text to.
+// there is no Player to publish text to. With a reference voice, a line's
+// acting or emotion direction replaces the voice description: the reference
+// carries the voice, and a shorter description is generated faster.
 export function miniConfig(ttsPort) {
   return {
     ...initialConfig({}),
     roomId: "bridge-mini",
     publishTextToPlayers: false,
     chatVoiceRegistrationEnabled: true,
+    deliveryCaptionMode: "replace",
     provider: {
       type: "speech",
       baseUrl: `http://127.0.0.1:${ttsPort}`,
@@ -72,10 +75,14 @@ export function createMini({
     void app.close();
     throw Error("Discord Botを初期化できませんでした");
   }
-  // Data brought over from Bridge may have chat registration turned off.
-  if (!app.store.config.chatVoiceRegistrationEnabled)
+  // Data brought over from Bridge may hold other settings for these.
+  if (
+    !app.store.config.chatVoiceRegistrationEnabled ||
+    app.store.config.deliveryCaptionMode !== "replace"
+  )
     app.store.change((config) => {
       config.chatVoiceRegistrationEnabled = true;
+      config.deliveryCaptionMode = "replace";
     });
   forgetRooms(app.store);
   forgetVoiceless(app.store);

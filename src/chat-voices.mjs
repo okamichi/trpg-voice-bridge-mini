@@ -6,7 +6,11 @@ import {
   voiceSchema,
 } from "./contracts.mjs";
 import { AUDIO_LIMIT } from "./provider.mjs";
-import { NEW_VOICE_DEFAULTS, VOICE_CONFIRMATION } from "./voice-defaults.mjs";
+import {
+  NEW_VOICE_DEFAULTS,
+  VOICE_CONFIRMATION,
+  newVoiceSeed,
+} from "./voice-defaults.mjs";
 
 export function voiceCommand(text) {
   const trimmed = text.trim();
@@ -126,6 +130,7 @@ export class ChatVoices {
               const stamp = new Date().toISOString();
               voice = {
                 ...NEW_VOICE_DEFAULTS,
+                seed: newVoiceSeed(),
                 id: randomUUID(),
                 name: `${character.displayName.slice(0, 150)}の声 ${stamp} ${job.id.slice(0, 8)}`,
                 caption: command.caption,
@@ -223,8 +228,10 @@ export class ChatVoices {
       created: Date.now(),
       characterId: character.id,
     };
+    // Remaking a voice from its current settings keeps its seed.
     const voice = {
       ...NEW_VOICE_DEFAULTS,
+      seed: newVoiceSeed(),
       ...structuredClone(base ?? {}),
       id: randomUUID(),
       name: `${character.displayName.slice(0, 150)}の声 ${new Date().toISOString()} ${job.id.slice(0, 8)}`,

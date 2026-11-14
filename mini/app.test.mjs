@@ -561,6 +561,7 @@ test("character names are offered while typing", async (t) => {
 test("data brought from Bridge gets chat registration turned on", async (t) => {
   const { mini } = await setup(t);
   assert.equal(mini.app.store.config.chatVoiceRegistrationEnabled, true);
+  assert.equal(mini.app.store.config.deliveryCaptionMode, "replace");
   assert.equal(mini.app.engine.config.provider.type, "irodori");
   assert.equal(mini.app.store.config.provider.type, "speech");
 });
@@ -708,4 +709,56 @@ test("reasons that point at Bridge's admin page are rewritten for Discord", () =
     ),
     /キャラは500人まで/,
   );
+});
+
+test("a new voice gets a random seed; remaking it from its settings keeps the seed", async (t) => {
+  const { mini, command, connect, say, posts, character, generations } =
+    await setup(t);
+  await mini.login("token-1");
+  await command("join");
+  await connect();
+  const voice = () =>
+    mini.app.store.config.voiceProfiles.find(
+      (v) => v.id === character()?.voiceProfileId,
+    );
+
+  await say("（ブリッジ声登録）落ち着いた声。");
+  await until(() => voice());
+  const first = voice().seed;
+  assert.notEqual(first, "1");
+  assert.equal(String(generations.at(-1).irodori.seed), first);
+
+  await say("（ブリッジ声登録）落ち着いた声。");
+  await until(() => voice() && voice().seed !== first);
+  const second = voice().seed;
+  assert.notEqual(second, first, "the same description makes another voice");
+
+  // /bridge voice without a description starts from the current voice.
+  const made = generations.length;
+  await command("voice", { character: NAME });
+  await until(() => generations.length > made);
+  assert.equal(String(generations.at(-1).irodori.seed), second);
+  assert.ok(posts.some((m) => m.payload.content.includes("の声づくり")));
+});
+
+test("with a reference voice, a direction replaces the voice description", async (t) => {
+  const { mini, command, connect, say, character, generations } =
+    await setup(t);
+  await mini.login("token-1");
+  await command("join");
+  await connect();
+  await say("（ブリッジ声登録）活発な若い男の低い声。");
+  await until(() => character().voiceProfileId);
+  // The confirmation sample has no reference yet; it is made from the description.
+  assert.equal(generations.at(-1).irodori.caption, "活発な若い男の低い声。");
+
+  const made = generations.length;
+  await say("（演技:小声で）待って、この先に見張りがいる。");
+  await until(() => generations.length > made);
+  assert.equal(generations.at(-1).irodori.caption, "演技: 小声で");
+
+  const plain = generations.length;
+  await say("この先に見張りがいる、音を立てるなよ。");
+  await until(() => generations.length > plain);
+  assert.equal(generations.at(-1).irodori.caption, "活発な若い男の低い声。");
 });
