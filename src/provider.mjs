@@ -86,9 +86,9 @@ export function payload(text, v, p, deliveryCaptionMode = "append", model) {
     "感情・演技の指定方法が不正です",
   );
   const delivery = parseDelivery(text);
-  const instruction = delivery.caption
-    ? `この発言の演技指示: ${delivery.caption}。`
-    : "";
+  // The voice description and the line's direction are joined with "/",
+  // which listening chose over sentences and labels.
+  const instruction = delivery.caption;
   const hasReference = ![
     "none",
     "no_ref",
@@ -96,15 +96,19 @@ export function payload(text, v, p, deliveryCaptionMode = "append", model) {
     "null",
     "text-only",
   ].includes(v.voiceId.toLowerCase());
-  const caption =
-    instruction && deliveryCaptionMode === "replace" && hasReference
+  // Without a direction the saved description goes as it is, so a voice keeps
+  // sounding as it did when it was made.
+  const caption = !instruction
+    ? v.caption
+    : deliveryCaptionMode === "replace" && hasReference
       ? instruction
       : (deliveryCaptionMode === "prepend"
           ? [instruction, v.caption]
           : [v.caption, instruction]
         )
+          .map((part) => part.trim().replace(/[。．.\s]+$/u, ""))
           .filter(Boolean)
-          .join("。");
+          .join("/");
   check(caption.length <= 1000, "演技指示込みのcaptionは1000文字までです");
   if (p.type === "speech") {
     const constraints = voiceConstraints(model);

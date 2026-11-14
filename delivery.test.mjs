@@ -50,3 +50,11 @@ test("incomplete cues, empty bodies and oversized cues are rejected", () => {
   ])
     assert.throws(() => parseDelivery(text), undefined, text);
 });
+
+test("several free cues are joined with a slash, keeping their labels and dropping final stops", () => {
+  assert.equal(
+    parseDelivery("（演技:震える声で。）（感情：悲しみをこらえて）もういい。")
+      .caption,
+    "演技: 震える声で/感情: 悲しみをこらえて",
+  );
+});

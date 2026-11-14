@@ -94,3 +94,50 @@ test("text and caption cannot inject TTS JSON fields and voice paths are rejecte
     );
   assert.equal(calls, 1);
 });
+
+test("the voice description and the line's direction are joined with a slash", async () => {
+  const { payload } = await import("./provider.mjs");
+  const model = {
+    id: "m",
+    speech: {
+      voices: [{ name: "none" }, { name: "r" }],
+      options: [{ name: "instructions" }, { name: "steps", default: 40 }],
+    },
+  };
+  const voice = (caption, voiceId = "r") => ({
+    id: "v",
+    name: "v",
+    provider: "irodori-local",
+    voiceId,
+    caption,
+    seed: "1",
+    speed: 1,
+    steps: 12,
+  });
+  const sent = (text, caption, mode = "append", voiceId) =>
+    JSON.parse(
+      payload(text, voice(caption, voiceId), { type: "speech" }, mode, model),
+    ).instructions;
+  assert.equal(
+    sent(
+      "（演技：震える声で、怯えながら）誰か……いるの？",
+      "活発な若い男の低い声",
+    ),
+    "活発な若い男の低い声/演技: 震える声で、怯えながら",
+  );
+  assert.equal(
+    sent("（演技:小声で）待って。", "落ち着いた初老の男性の声。"),
+    "落ち着いた初老の男性の声/演技: 小声で",
+  );
+  assert.equal(
+    sent("（演技:小声で）待って。", "落ち着いた声", "prepend"),
+    "演技: 小声で/落ち着いた声",
+  );
+  assert.equal(
+    sent("（演技:小声で）待って。", "落ち着いた声", "replace"),
+    "演技: 小声で",
+  );
+  // Without a direction the saved description is sent unchanged.
+  assert.equal(sent("（怒り）ふざけるな！", "活発な声。"), "活発な声。");
+  assert.equal(sent("こんにちは。", ""), "");
+});

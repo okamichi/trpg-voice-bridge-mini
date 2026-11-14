@@ -51,7 +51,7 @@ export function parseDelivery(text) {
         if (Object.hasOwn(DELIVERY_EMOJI, value)) return DELIVERY_EMOJI[value];
         // Arbitrary descriptions affect the whole utterance's caption. They do not
         // split speech or replace the character's base identity / seed.
-        instructions.push(`${kind}: ${value}`);
+        instructions.push(`${kind}: ${value.replace(/[。．.\s]+$/u, "")}`);
         return "";
       },
     )
@@ -59,7 +59,8 @@ export function parseDelivery(text) {
   if (/(?:\[|（)\s*(?:感情|演技)[:：]/.test(input))
     throw new Error("感情・演技指示の閉じカッコを確認してください");
   if (!input) throw new Error("読み上げる本文がありません");
-  const caption = instructions.join("。");
+  // Joined with "/", as the voice description and the direction are.
+  const caption = instructions.filter(Boolean).join("/");
   if ([...caption].length > 200)
     throw new Error("発言の演技指示は合計200文字以下にしてください");
   return { input, caption };
