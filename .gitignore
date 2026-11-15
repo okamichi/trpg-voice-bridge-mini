@@ -18,3 +18,5 @@ data/
 .packaging/
 dist/
 developments/
+/work/
+/Irodori-TTS-*-Anime-*.gguf
