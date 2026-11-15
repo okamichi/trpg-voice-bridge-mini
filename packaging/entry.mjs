@@ -1,6 +1,8 @@
 // The executable of the Bridge Mini package. Everything it reads and writes
-// is beside it: the model, speech.cpp and the data directory.
-import { dirname, join } from "node:path";
+// is beside it: the model, speech.cpp and the data directory. The model can
+// be another GGUF file given by TRPG_VOICE_BRIDGE_MINI_MODEL, as from the
+// source tree.
+import { dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { DatabaseSync } from "node:sqlite";
 import { runMini } from "../mini/run.mjs";
@@ -43,12 +45,16 @@ runMini({
   selfTest,
   layout: () => {
     const root = dirname(process.execPath);
+    const model = process.env.TRPG_VOICE_BRIDGE_MINI_MODEL;
     return {
       dataDir: join(root, "data"),
       speechDir: join(root, "runtime/speech"),
-      model: join(root, "runtime/models", MINI_MODEL.file),
-      modelHint:
-        "展開したフォルダのruntime/modelsを確認してください。実行ファイルだけを別の場所へ移すと動きません。",
+      model: model
+        ? resolve(model)
+        : join(root, "runtime/models", MINI_MODEL.file),
+      modelHint: model
+        ? "環境変数 TRPG_VOICE_BRIDGE_MINI_MODEL のGGUFの場所を確認してください。"
+        : "展開したフォルダのruntime/modelsを確認してください。実行ファイルだけを別の場所へ移すと動きません。",
     };
   },
 }).catch((error) => {
