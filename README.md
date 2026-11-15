@@ -244,3 +244,5 @@ MITライセンスです。全文は [LICENSE](LICENSE) を見てください。
 音声コーデックは、Metaの [facebook/dacvae-watermarked](https://huggingface.co/facebook/dacvae-watermarked)（Apache License 2.0）を元にしています。音声モデルの日本語テキストエンコーダーは、SB Intuitionsの [modernbert-ja-310m](https://huggingface.co/sbintuitions/modernbert-ja-310m)（MIT）を元にしています。
 
 音声モデル・音声コーデック・テキストエンコーダーのライセンス文と、音声モデルの利用上の制限は、ダウンロードしたアプリの `licenses/model` フォルダにあります。speech.cppのライセンス文は `runtime/speech` フォルダにあります。
+
+他のモデルや他の量子化モデルを利用したい場合は、[models.md](models.md) を参照してください。
