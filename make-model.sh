@@ -1,8 +1,10 @@
 #!/bin/sh
 # 
-# 「Irodori-TTS-v4.1-Anime」のGGUFファイルを取得・変換するスクリプト。
+# 「Irodori-TTS-v4.1-Anime」か「Irodori-TTS-v4.1-Small-SUN」のGGUFファイルを取得・変換するスクリプト。
+# 実行すると、どちらを作るかを番号で選ぶ。最初から指定する場合は：
+# ./make-model.sh --model sun
 # 量子化 Q4_K以外のタイプの場合は：
-# ./make-anime-model.sh --type q8_0
+# ./make-model.sh --type q8_0
 #
 # 生成したGGUFモデルの指定方法は次のように環境変数で設定する
 # TRPG_VOICE_BRIDGE_MINI_MODEL=./Irodori-TTS-859M-Anime-v4.1-Q4_K.gguf npm start
@@ -38,7 +40,7 @@ if [ ! -x "$work/uv/uv" ]; then
   /usr/bin/tar -xzf "$archive" -C "$work/uv" --strip-components=1 || exit 1
 fi
 
-"$work/uv/uv" run --quiet --no-project --python 3.10 "$root/make_anime_model.py" "$@"
+"$work/uv/uv" run --quiet --no-project --python 3.10 "$root/make_model.py" "$@"
 status=$?
 if [ "$status" -eq 0 ] && [ -f "$work/.done" ]; then
   rm -rf "$work"

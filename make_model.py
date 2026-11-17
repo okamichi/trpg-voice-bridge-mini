@@ -1,14 +1,14 @@
-"""Makes Irodori-TTS-v4.1-Anime, a fine-tune of the model TRPG Voice Bridge Mini carries, into a GGUF file in Mini's
-folder.
+"""Makes a fine-tune of the model TRPG Voice Bridge Mini carries, Irodori-TTS-v4.1-Small, into a GGUF file in Mini's
+folder: Irodori-TTS-v4.1-Anime or Irodori-TTS-v4.1-Small-SUN.
 
-make-anime-model.sh (macOS) and make-anime-model.bat (Windows) fetch uv into work/ and run this file with a Python
-that uv installs there. It installs the four Python packages the conversion needs, fetches the checkpoint, converts it
-to an F32 GGUF file and quantizes that with Mini's speech. The codec and the official runtime's defaults, which the
-fine-tune shares with Irodori-TTS-v4.1-Small, come from the Small model Mini carries, so neither PyTorch nor the codec's
-weights are fetched. Everything but the result goes into work/. The launcher removes work/ once the file is made; after
-a failure it stays, and running again resumes.
+make-model.sh (macOS) and make-model.bat (Windows) fetch uv into work/ and run this file with a Python that uv installs
+there. It asks which model to make unless --model names it, installs the four Python packages the conversion needs,
+fetches the checkpoint, converts it to an F32 GGUF file and quantizes that with Mini's speech. The codec and the
+official runtime's defaults, which the fine-tunes share with Irodori-TTS-v4.1-Small, come from the Small model Mini
+carries, so neither PyTorch nor the codec's weights are fetched. Everything but the result goes into work/. The
+launcher removes work/ once the file is made; after a failure it stays, and running again resumes.
 
-usage: make_anime_model.py [--type q4_k|q5_k|q6_k|q8_0|f16] [--keep-work]
+usage: make_model.py [--model anime|sun] [--type q4_k|q5_k|q6_k|q8_0|f16] [--keep-work]
 """
 
 import argparse
@@ -31,13 +31,31 @@ CURL = Path(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
 # The model Mini carries (Mini's mini/model.mjs).
 SMALL = {"file": "Irodori-TTS-859M-v4.1-Q4_K.gguf", "size": 859871072,
          "sha256": "a1c174f4552817e84dd6a2a020bc3d0589fd7f30d0c3db53ad04a1e69fb5dbfd"}
-# The checkpoint's files the conversion reads. The repository also holds torchao quantizations, about 4.5 GB, which
-# it does not.
-ANIME = {"repository": "phasefield-audio/Irodori-TTS-v4.1-Anime", "revision": "6b259f5baa5e236b3d14cbd1f8555ca87d92b530",
-         "files": {"model.safetensors": (3064295596, "5630aa0a661930ff678a1d1f1893876e24520f4776d4fcc25ca54e6ab9f41f37"),
-                   "README.md": (1011, "28bd916a1312c4da901cfaf5bb4476cad5b9b21595e6514b2326707e8c82d773"),
-                   "tokenizer/tokenizer.json": (6718495, "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d"),
-                   "tokenizer/tokenizer_config.json": (668, "d229a271c64de1a7939d20d3665498e873fa91d5ee2edf135d73ec752cb9c9d3")}}
+# The models this makes: the repository and revision of each, the word for it in the GGUF file's name, and the files
+# the conversion reads, each with its size and SHA-256 and, when another repository holds it, that one.
+TOKENIZER = {"tokenizer/tokenizer.json": (6718495, "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d"),
+             "tokenizer/tokenizer_config.json": (668, "d229a271c64de1a7939d20d3665498e873fa91d5ee2edf135d73ec752cb9c9d3")}
+MODELS = {
+    # A fine-tune on anime-style speech. Its repository also holds torchao quantizations, about 4.5 GB, which this
+    # does not fetch.
+    "anime": {"label": "Anime（アニメ調の話し方）", "finetune": "Anime",
+              "repository": "phasefield-audio/Irodori-TTS-v4.1-Anime",
+              "revision": "6b259f5baa5e236b3d14cbd1f8555ca87d92b530",
+              "files": {"model.safetensors": (3064295596,
+                                              "5630aa0a661930ff678a1d1f1893876e24520f4776d4fcc25ca54e6ab9f41f37"),
+                        "README.md": (1011, "28bd916a1312c4da901cfaf5bb4476cad5b9b21595e6514b2326707e8c82d773"),
+                        **TOKENIZER}},
+    # The weights of takuma104/Irodori-TTS-v4.1-Small-Yomi, which reads kanji more accurately. Its repository holds no
+    # tokenizer; the one of Irodori-TTS-v4.1-Small, its base, is the same files as Anime's.
+    "sun": {"label": "SUN（漢字の読みを改善）", "finetune": "SUN",
+            "repository": "summerAIO/Irodori-TTS-v4.1-Small-SUN",
+            "revision": "a68be741b6631186ce2b4e60ce6432dd8d920558",
+            "files": {"model.safetensors": (3064295596,
+                                            "af9bbab351046c5320b71add301b425d367d9a2c6d6828f426ee3156cf785215"),
+                      "README.md": (5781, "87e25de8f85d0fe42221f390b46dfa3ac1443f47218482949f2b9f62e187fb03"),
+                      **{name: (*check, ("Aratako/Irodori-TTS-v4.1-Small", "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b"))
+                         for name, check in TOKENIZER.items()}}},
+}
 # The packages the conversion imports, at the versions of the uv.lock of speech.cpp's converter (reference/irodori-tts
 # at the commit below), with the hashes of their wheels for Python 3.10 on macOS (Apple Silicon) and Windows (x64).
 REQUIREMENTS = """\
@@ -55,7 +73,6 @@ pyyaml==6.0.3 \\
     --hash=sha256:bdb2c67c6c1390b63c6ff89f210c8fd09d9a1217a465701eac7316313c915e4c
 """
 TYPES = ("q4_k", "q5_k", "q6_k", "q8_0", "f16")
-F32_FILE = "Irodori-TTS-859M-Anime-v4.1-F32.gguf"
 # Free space a run from nothing takes at its peak: the checkpoint, the F32 file, the result and Python.
 NEEDED_BYTES = 9e9
 
@@ -82,11 +99,11 @@ NEEDED_BYTES = 9e9
 #   TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #   SOFTWARE.
 #
-# It keeps the path the Anime fine-tune takes: ModernBERT-ja's text backbone, rectified flow, a caption condition and
-# a Unigram tokenizer. Where convert.py loads the codec with dacvae and reads the runtime's defaults from irodori-tts,
+# It keeps the path the fine-tunes of MODELS take: ModernBERT-ja's text backbone, rectified flow, a caption condition
+# and a Unigram tokenizer. Where convert.py loads the codec with dacvae and reads the runtime's defaults from irodori-tts,
 # convert() takes them from the Small model, into which the same converter wrote them; the file it writes is the one
 # convert.py writes, in layout 3.
-def convert(checkpoint_dir, small_path, out_dir):
+def convert(key, checkpoint_dir, small_path, out_dir):
     import numpy as np
     import yaml
     from gguf import GGUFReader, GGUFValueType, GGUFWriter, LlamaFileType, naming_convention, size_label
@@ -97,8 +114,10 @@ def convert(checkpoint_dir, small_path, out_dir):
     layout, requires = 3, "0.8.7"
     # The bounds of OpenAI's speed, which Irodori-TTS-Server takes and divides the length by.
     min_speed, max_speed = 0.25, 4.0
-    repository_id = ANIME["repository"]
-    revision = ANIME["revision"]
+    model_pin = MODELS[key]
+    repository_id = model_pin["repository"]
+    revision = model_pin["revision"]
+    finetune = model_pin["finetune"]
 
     small = GGUFReader(small_path)
 
@@ -110,7 +129,9 @@ def convert(checkpoint_dir, small_path, out_dir):
     text_config = json.loads(checkpoint.metadata()["text_encoder_config_json"])
     assert config["text_encoder_type"] == "pretrained" and text_config["model_type"] == "modernbert"
     assert config["pretrained_projector_type"] == "residual_mlp" and config["latent_patch_size"] == 1
-    assert config.get("flow_parameterization", "rf_velocity") == "rf_velocity" == small_value(arch + ".flow")
+    # convert.py takes any flow but MeanFlow for rectified flow; SUN's checkpoint names none (null).
+    assert config.get("flow_parameterization", "rf_velocity") != "meanflow"
+    assert small_value(arch + ".flow") == "rf_velocity"
     with open(os.path.join(checkpoint_dir, "README.md"), encoding="utf-8") as f:
         card = yaml.safe_load(f.read().split("---\n")[1])
     assert small_value(arch + ".latent_dim") == int(config["latent_dim"]), "the model's latent is not the codec's"
@@ -357,17 +378,17 @@ def convert(checkpoint_dir, small_path, out_dir):
     w.add_organization(repository_id.split("/")[0])
     w.add_basename("Irodori-TTS")
     w.add_size_label(label)
-    w.add_finetune("Anime")
+    w.add_finetune(finetune)
     w.add_version("v4.1")
     w.add_license({"mit": "MIT"}[card["license"]])
     w.add_source_url(f"{repository}/tree/{revision}")
     w.add_source_repo_url(repository)
     w.add_file_type(LlamaFileType.ALL_F32)
-    # The Anime card omits its language.
+    # A card may omit its language, as Anime's does; the models speak Japanese.
     w.add_languages(sorted(card.get("language", ["ja"])))
     w.kv_data[0] = dict(sorted(w.kv_data[0].items(), key=lambda item: not item[0].startswith("general.")))
 
-    path = os.path.join(out_dir, naming_convention(None, "Irodori-TTS", "Anime", "v4.1", label, "f32") + ".gguf")
+    path = os.path.join(out_dir, naming_convention(None, "Irodori-TTS", finetune, "v4.1", label, "f32") + ".gguf")
     w.write_header_to_file(path)
     w.write_kv_data_to_file()
     w.write_ti_data_to_file()
@@ -450,27 +471,49 @@ def mini():
     raise Failure("TRPG Voice Bridge Miniのフォルダ（trpg-voice-bridge-miniがあるフォルダ）に置いて実行してください")
 
 
+def choose():
+    """Asks which model to make, when --model names none."""
+    if not sys.stdin.isatty():
+        raise Failure(f"--model で作るモデル（{'、'.join(MODELS)}）を指定してください")
+    keys = list(MODELS)
+    print("どのモデルを作りますか？")
+    for i, key in enumerate(keys, 1):
+        print(f"  {i}) {MODELS[key]['label']}")
+    while True:
+        try:
+            answer = input("番号> ").strip()
+        except EOFError:
+            raise Failure("モデルが選ばれませんでした")
+        if answer.isdigit() and 1 <= int(answer) <= len(keys):
+            return keys[int(answer) - 1]
+        print(f"1～{len(keys)}の番号を入力してください")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Irodori-TTS-v4.1-AnimeのGGUFを、このフォルダに作ります")
+    parser = argparse.ArgumentParser(description="Irodori-TTS-v4.1-Smallの派生モデルのGGUFを、このフォルダに作ります")
+    parser.add_argument("--model", choices=MODELS, help="作るモデル（指定しないと起動したときに聞く）")
     parser.add_argument("--type", choices=TYPES, default="q4_k", help="量子化の種類（既定 q4_k）")
     parser.add_argument("--keep-work", action="store_true", help="できたあとも work/ を残す")
     args = parser.parse_args()
+    key = args.model or choose()
+    model = MODELS[key]
+    name = model["finetune"]
 
-    result = ROOT / f"Irodori-TTS-859M-Anime-v4.1-{args.type.upper()}.gguf"
+    result = ROOT / f"Irodori-TTS-859M-{name}-v4.1-{args.type.upper()}.gguf"
     if result.exists():
         print(f"もうできています: {result}")
         if not args.keep_work and WORK.exists():
             (WORK / ".done").write_text("", "utf-8")
         return
     if not UV.exists():
-        raise Failure("make-anime-model.sh（macOS）か make-anime-model.bat（Windows）から実行してください")
+        raise Failure("make-model.sh（macOS）か make-model.bat（Windows）から実行してください")
     speech, small = mini()
-    f32 = WORK / "out" / F32_FILE
+    f32 = WORK / "out" / f"Irodori-TTS-859M-{name}-v4.1-F32.gguf"
     free = shutil.disk_usage(ROOT).free
     if not f32.exists() and free < NEEDED_BYTES:
         raise Failure(f"空き容量が足りません。{ROOT} のあるドライブに {gb(NEEDED_BYTES)} 以上の空きが要ります（今は {gb(free)}）")
 
-    print(f"Anime版のモデル（{args.type}）を作ります。作業ファイルは {WORK} に置きます。", flush=True)
+    print(f"{name}版のモデル（{args.type}）を作ります。作業ファイルは {WORK} に置きます。", flush=True)
     tmp = WORK / "tmp"
     tmp.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not re.match(r"(PYTHON|VIRTUAL_ENV|CONDA|PIP_)", k, re.I)}
@@ -491,18 +534,19 @@ def main():
             "パッケージのインストール", env=env)
         stamp.write_text(REQUIREMENTS, "utf-8")
 
-    print("2/4 Anime版のチェックポイントをダウンロードします（3.1 GB）", flush=True)
-    checkpoint = WORK / "anime"
-    for name, (size, sha256) in ANIME["files"].items():
-        download(f"https://huggingface.co/{ANIME['repository']}/resolve/{ANIME['revision']}/{name}",
-                 checkpoint / name, size, sha256)
+    total = sum(check[0] for check in model["files"].values())
+    print(f"2/4 {name}版のチェックポイントをダウンロードします（{gb(total)}）", flush=True)
+    checkpoint = WORK / key
+    for file, (size, sha256, *source) in model["files"].items():
+        repository, revision = source[0] if source else (model["repository"], model["revision"])
+        download(f"https://huggingface.co/{repository}/resolve/{revision}/{file}", checkpoint / file, size, sha256)
 
     print("3/4 F32のGGUFに変換します", flush=True)
     if not f32.exists():
         out = tmp / "convert"
         shutil.rmtree(out, ignore_errors=True)
         out.mkdir(parents=True)
-        run([python, Path(__file__).resolve(), "convert", checkpoint, small, out], "F32への変換", env=env)
+        run([python, Path(__file__).resolve(), "convert", key, checkpoint, small, out], "F32への変換", env=env)
         f32.parent.mkdir(parents=True, exist_ok=True)
         only_gguf(out).replace(f32)
 
@@ -514,7 +558,7 @@ def main():
     quantized = only_gguf(out)
     info = subprocess.run([str(speech), "info", str(quantized)], capture_output=True, text=True, encoding="utf-8")
     if info.returncode != 0 or not re.search(r"^architecture\s+irodori-tts\b", info.stdout, re.M) \
-            or not re.search(r"^finetune\s+Anime$", info.stdout, re.M):
+            or not re.search(rf"^finetune\s+{name}$", info.stdout, re.M):
         raise Failure("できたファイルを音声生成で読めませんでした")
     quantized.replace(result)
 
@@ -529,7 +573,7 @@ def main():
 if __name__ == "__main__":
     if sys.argv[1:2] == ["convert"]:
         # Run by main() in work/venv, which has the packages.
-        convert(*sys.argv[2:5])
+        convert(*sys.argv[2:6])
     else:
         try:
             main()
