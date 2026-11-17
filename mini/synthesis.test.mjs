@@ -205,3 +205,18 @@ test("the step count can be set at launch", async () => {
     "the measuring pass never takes more steps than the line itself",
   );
 });
+
+test("the measuring pass leaves out the emotion boost, which speech.cpp refuses for the voice none", async () => {
+  const { requests, say } = speech();
+  await say({
+    input: "うん。",
+    speaker_kv_scale: 0.4,
+    speaker_kv_min_t: 0.7,
+  });
+  const [probe, line] = requests;
+  assert.equal(probe.voice, "none");
+  assert.ok(!("speaker_kv_scale" in probe));
+  assert.ok(!("speaker_kv_min_t" in probe));
+  assert.equal(line.speaker_kv_scale, 0.4);
+  assert.equal(line.speaker_kv_min_t, 0.7);
+});

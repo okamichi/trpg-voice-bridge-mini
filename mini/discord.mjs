@@ -117,12 +117,14 @@ export class MiniDiscord {
       const bot = await createBot({
         ...options,
         designSettings: this.designSettings,
-        // Steps are a launch option, not a property of a voice.
+        // Steps are a launch option, not a property of a voice; that leaves
+        // the form's fifth field to the emotion boost.
         designAdvancedKeys: [
           "seed",
           "cfgScaleText",
           "cfgScaleCaption",
           "cfgScaleSpeaker",
+          "emotionBoost",
         ],
       });
       await this.attach(bot);
@@ -168,7 +170,9 @@ export class MiniDiscord {
 
   // Engine's identify hook passes every chat line here first. With a
   // description, （ブリッジ声登録） registers at once, as in Bridge. Bare, it
-  // only offers a button: nothing is generated until someone asks for it.
+  // only offers buttons: nothing is generated until someone asks for it. A
+  // name that has a voice is offered to fix that voice, from its settings and
+  // its reference, or to make a new one from a description.
   chatCommand(event) {
     const command = voiceCommand(event.text);
     if (command?.kind !== "register" || command.caption || !this.channel)
@@ -180,10 +184,27 @@ export class MiniDiscord {
     setImmediate(() => {
       const character = findByName(this.store.config, name);
       if (!character?.enabled) return;
-      void this.post({
-        content: `**${safe(character.displayName)}** の声を作りますか？`,
-        components: [row(button(`mini:voice:${character.id}`, "声を作る", 1))],
-      });
+      const voiced = this.store.config.voiceProfiles.some(
+        (v) => v.id === character.voiceProfileId,
+      );
+      void this.post(
+        voiced
+          ? {
+              content: `**${safe(character.displayName)}** の声を直しますか？ 新しく作りますか？`,
+              components: [
+                row(
+                  button(`mini:edit:${character.id}`, "今の声を直す", 1),
+                  button(`mini:voice:${character.id}`, "新しく作る"),
+                ),
+              ],
+            }
+          : {
+              content: `**${safe(character.displayName)}** の声を作りますか？`,
+              components: [
+                row(button(`mini:voice:${character.id}`, "声を作る", 1)),
+              ],
+            },
+      );
     });
     return event;
   }
@@ -439,7 +460,20 @@ export class MiniDiscord {
       const [prefix, kind, id, action] = (i.customId ?? "").split(":");
       if (prefix !== "mini") return;
       if (kind === "pair") await this.pair(i, id, action);
-      else if (kind === "voice") {
+      else if (kind === "edit") {
+        // As /bridge voice without a description: the current voice, with its
+        // settings and its reference, is where the design starts.
+        const character = this.store.config.characters.find((c) => c.id === id);
+        check(character, "キャラが見つかりません", 404);
+        check(
+          this.store.config.voiceProfiles.some(
+            (v) => v.id === character.voiceProfileId,
+          ),
+          "このキャラにはまだ声がありません。（ブリッジ声登録）で作ってください",
+        );
+        await i.deferReply({ flags: EPHEMERAL });
+        await this.design(i, character.displayName, "");
+      } else if (kind === "voice") {
         const character = this.store.config.characters.find((c) => c.id === id);
         check(character, "キャラが見つかりません", 404);
         if (i.isModalSubmit?.()) {

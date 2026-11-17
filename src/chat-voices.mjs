@@ -5,7 +5,7 @@ import {
   resolveCharacter,
   voiceSchema,
 } from "./contracts.mjs";
-import { AUDIO_LIMIT } from "./provider.mjs";
+import { AUDIO_LIMIT, hasReferenceVoice } from "./provider.mjs";
 import {
   NEW_VOICE_DEFAULTS,
   VOICE_CONFIRMATION,
@@ -299,26 +299,33 @@ export class ChatVoices {
           });
       this.valid(task);
       const audio = task.designer ? null : engine.saveAudio(wav);
-      stage = "register";
-      task.referenceId = `chat-${task.job.id}`;
-      records.update(task.job.id, {
-        status: "registering",
-        referenceId: task.referenceId,
-      });
-      this.changed();
-      await engine.references.register({
-        provider: task.provider,
-        voiceId: task.referenceId,
-        wav,
-        wait: true,
-        signal: task.controller.signal,
-        before: () => {
-          this.valid(task);
-          check(store.config.voiceProfiles.length < 500, "登録上限です", 409);
-        },
-      });
-      this.valid(task);
-      task.voice.voiceId = task.referenceId;
+      // A design heard with a reference, the voice it started from or one
+      // picked for it, keeps that reference: the voice then speaks as it was
+      // heard, and only its settings are saved. Registering what was heard as
+      // a new reference would make each remake a copy of a copy. A voice
+      // without one, made from a description, registers what was heard.
+      if (!task.designer || !hasReferenceVoice(task.voice.voiceId)) {
+        stage = "register";
+        task.referenceId = `chat-${task.job.id}`;
+        records.update(task.job.id, {
+          status: "registering",
+          referenceId: task.referenceId,
+        });
+        this.changed();
+        await engine.references.register({
+          provider: task.provider,
+          voiceId: task.referenceId,
+          wav,
+          wait: true,
+          signal: task.controller.signal,
+          before: () => {
+            this.valid(task);
+            check(store.config.voiceProfiles.length < 500, "登録上限です", 409);
+          },
+        });
+        this.valid(task);
+        task.voice.voiceId = task.referenceId;
+      }
       stage = "save";
       store.change((config) => {
         this.valid(task);

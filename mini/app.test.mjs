@@ -431,14 +431,17 @@ test("a chat command without a description offers a button; nothing is generated
   );
   await until(() => character().voiceProfileId);
 
-  // Asked again, the description the character now has is offered for editing.
+  // Asked again, a name with a voice is offered to fix it or make a new one.
   await say("（ブリッジ声登録）");
-  await until(
-    () =>
-      posts.filter((m) => m.payload.content.includes("の声を作りますか"))
-        .length === 2,
-  );
-  const again = await send(interaction({ customId: button.custom_id }));
+  const choice = () =>
+    posts.find((m) => m.payload.content.includes("の声を直しますか"));
+  await until(() => choice());
+  const [fix, remake] = choice().payload.components[0].components;
+  assert.deepEqual([fix.label, remake.label], ["今の声を直す", "新しく作る"]);
+  assert.equal(fix.custom_id, `mini:edit:${character().id}`);
+  assert.equal(remake.custom_id, button.custom_id);
+  // A new one starts from the description the character now has.
+  const again = await send(interaction({ customId: remake.custom_id }));
   assert.equal(
     again.modal.components[0].components[0].value,
     "低く落ち着いた声。",
@@ -659,7 +662,7 @@ test("the voice limit is explained without pointing at an admin page", async (t)
   assert.doesNotMatch(notice.payload.content, /管理画面/);
 });
 
-test("the design form's advanced settings offer the seed and the CFG scales, not steps", async (t) => {
+test("the design form's advanced settings offer the seed, the CFG scales and the emotion boost, not steps", async (t) => {
   const { mini, command, posts, interaction } = await setup(t);
   await mini.login("token-1");
   await command("join");
@@ -677,9 +680,28 @@ test("the design form's advanced settings offer the seed and the CFG scales, not
   });
   mini.discord.bot.client.emit("interactionCreate", opened);
   await until(() => opened.modal);
+  const fields = opened.modal.components;
+  // Discord takes five fields at most.
   assert.deepEqual(
-    opened.modal.components.map((r) => r.components[0].custom_id),
-    ["seed", "cfgScaleText", "cfgScaleCaption", "cfgScaleSpeaker"],
+    fields.map((f) => f.components?.[0].custom_id ?? f.component.custom_id),
+    [
+      "seed",
+      "cfgScaleText",
+      "cfgScaleCaption",
+      "cfgScaleSpeaker",
+      "emotionBoost",
+    ],
+  );
+  // The boost is a choice, off for a new voice.
+  const boost = fields.at(-1);
+  assert.equal(boost.type, 18);
+  assert.equal(boost.component.type, 3);
+  assert.deepEqual(
+    boost.component.options.map((o) => [o.value, o.default]),
+    [
+      ["off", true],
+      ["on", false],
+    ],
   );
 });
 
@@ -761,4 +783,66 @@ test("with a reference voice, a direction replaces the voice description", async
   await say("この先に見張りがいる、音を立てるなよ。");
   await until(() => generations.length > plain);
   assert.equal(generations.at(-1).irodori.caption, "活発な若い男の低い声。");
+});
+
+test("fixing a voice keeps its reference and its seed; only its settings are saved", async (t) => {
+  const {
+    mini,
+    command,
+    connect,
+    say,
+    posts,
+    send,
+    interaction,
+    character,
+    generations,
+  } = await setup(t);
+  await mini.login("token-1");
+  await command("join");
+  await connect();
+  const voice = () =>
+    mini.app.store.config.voiceProfiles.find(
+      (v) => v.id === character()?.voiceProfileId,
+    );
+  await say("（ブリッジ声登録）落ち着いた声。");
+  await until(() => voice());
+  const before = structuredClone(voice());
+  assert.match(before.voiceId, /^chat-/);
+
+  await say("（ブリッジ声登録）");
+  const choice = () =>
+    posts.find((m) => m.payload.content.includes("の声を直しますか"));
+  await until(() => choice());
+  const [fix] = choice().payload.components[0].components;
+  const made = generations.length;
+  const opened = await send(interaction({ customId: fix.custom_id }));
+  assert.match(opened.replies[0].content, /声づくりを/);
+  // It is heard with the voice's own reference and seed.
+  await until(() => generations.length > made);
+  assert.equal(generations.at(-1).voice, before.voiceId);
+  assert.equal(String(generations.at(-1).irodori.seed), before.seed);
+
+  const form = () =>
+    posts.find((m) => m.payload.content.includes("の声づくり"));
+  const confirm = () =>
+    form()
+      ?.payload.components?.flatMap((r) => r.components)
+      .find((c) => c.label === "この声に決定");
+  await until(() => confirm() && !confirm().disabled);
+  mini.discord.bot.client.emit(
+    "interactionCreate",
+    interaction({ customId: confirm().custom_id, message: { id: form().id } }),
+  );
+  await until(() => voice() && voice().id !== before.id);
+  assert.equal(voice().voiceId, before.voiceId, "the reference is kept");
+  assert.equal(voice().seed, before.seed);
+  // The settings it replaces go; their reference stays with the new ones.
+  await until(
+    () => !mini.app.store.config.voiceProfiles.some((v) => v.id === before.id),
+  );
+  assert.ok(
+    mini.app.store.config.voiceProfiles.some(
+      (v) => v.voiceId === before.voiceId,
+    ),
+  );
 });

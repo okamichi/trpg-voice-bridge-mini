@@ -141,3 +141,59 @@ test("the voice description and the line's direction are joined with a slash", a
   assert.equal(sent("（怒り）ふざけるな！", "活発な声。"), "活発な声。");
   assert.equal(sent("こんにちは。", ""), "");
 });
+
+test("the emotion boost goes only with a reference voice, to a model that takes it", async () => {
+  const { payload, EMOTION_BOOST } = await import("./provider.mjs");
+  const { voiceSchema } = await import("./contracts.mjs");
+  const options = [
+    { name: "instructions" },
+    { name: "steps", default: 40 },
+    { name: "cfg_scale_speaker" },
+    { name: "speaker_kv_scale" },
+    { name: "speaker_kv_min_t" },
+  ];
+  const model = (names = options) => ({
+    id: "m",
+    speech: { voices: [{ name: "none" }, { name: "r" }], options: names },
+  });
+  const voice = (fields = {}) => ({
+    id: "v",
+    name: "v",
+    provider: "irodori-local",
+    voiceId: "r",
+    caption: "明るく元気な若い女性の声",
+    seed: "1",
+    speed: 1,
+    steps: 12,
+    ...fields,
+  });
+  const sent = (v, m = model()) =>
+    JSON.parse(
+      payload("（演技:怯えながら）誰？", v, { type: "speech" }, "replace", m),
+    );
+  assert.deepEqual(EMOTION_BOOST, {
+    speaker_kv_scale: 0.4,
+    speaker_kv_min_t: 0.7,
+  });
+  const boosted = sent(voice({ emotionBoost: true }));
+  assert.equal(boosted.speaker_kv_scale, 0.4);
+  assert.equal(boosted.speaker_kv_min_t, 0.7);
+  // Off, which is no key at all, sends neither.
+  for (const body of [
+    sent(voice()),
+    sent(voice({ emotionBoost: true, voiceId: "none" })),
+    // A MeanFlow model takes neither setting.
+    sent(
+      voice({ emotionBoost: true }),
+      model([{ name: "instructions" }, { name: "steps", default: 4 }]),
+    ),
+  ]) {
+    assert.ok(!("speaker_kv_scale" in body));
+    assert.ok(!("speaker_kv_min_t" in body));
+  }
+  voiceSchema(voice({ emotionBoost: true }));
+  for (const value of [false, "on", 1])
+    assert.throws(() => voiceSchema(voice({ emotionBoost: value })), {
+      message: /感情ブースト/,
+    });
+});

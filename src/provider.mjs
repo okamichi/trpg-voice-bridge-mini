@@ -3,6 +3,13 @@ import { check, voiceSchema, DELIVERY_CAPTION_MODES } from "./contracts.mjs";
 import { voiceConstraints } from "./voice-constraints.mjs";
 import { speechModel } from "./tts-api.mjs";
 export const AUDIO_LIMIT = 25 * 1024 * 1024;
+// A voice with Mini's 感情ブースト scales its reference's keys and values by
+// this much over the first part of the flow, so a line's direction shows more
+// against the reference. Chosen by listening: a clear direction, the voice kept.
+export const EMOTION_BOOST = Object.freeze({
+  speaker_kv_scale: 0.4,
+  speaker_kv_min_t: 0.7,
+});
 export async function readLimited(response, limit) {
   if (!response.body || Number(response.headers.get("content-length")) > limit)
     throw new Error("応答が大きすぎます");
@@ -79,6 +86,13 @@ export function inspectWav(b) {
     mediaType: "audio/wav",
   };
 }
+// Whether a voice ID names a reference recording, rather than leaving the
+// voice to the model.
+export function hasReferenceVoice(voiceId) {
+  return !["none", "no_ref", "no-ref", "null", "text-only"].includes(
+    String(voiceId).toLowerCase(),
+  );
+}
 export function payload(text, v, p, deliveryCaptionMode = "append", model) {
   voiceSchema(v);
   check(
@@ -89,13 +103,7 @@ export function payload(text, v, p, deliveryCaptionMode = "append", model) {
   // The voice description and the line's direction are joined with "/",
   // which listening chose over sentences and labels.
   const instruction = delivery.caption;
-  const hasReference = ![
-    "none",
-    "no_ref",
-    "no-ref",
-    "null",
-    "text-only",
-  ].includes(v.voiceId.toLowerCase());
+  const hasReference = hasReferenceVoice(v.voiceId);
   // Without a direction the saved description goes as it is, so a voice keeps
   // sounding as it did when it was made.
   const caption = !instruction
@@ -141,6 +149,15 @@ export function payload(text, v, p, deliveryCaptionMode = "append", model) {
     ])
       if (constraints.cfg && active && takes(name) && v[key] != null)
         body[name] = v[key];
+    // The boost scales the reference: none goes without it, which speech.cpp
+    // refuses it for, and so does a model that takes neither setting, such as
+    // a MeanFlow model.
+    if (
+      v.emotionBoost &&
+      hasReference &&
+      Object.keys(EMOTION_BOOST).every((name) => takes(name))
+    )
+      Object.assign(body, EMOTION_BOOST);
     return JSON.stringify(body);
   }
   const irodori = {

@@ -23,6 +23,8 @@ const advanced = [
   ["cfgScaleText", "テキストCFG（空欄または0〜10）", 10],
   ["cfgScaleCaption", "説明CFG（空欄または0〜10）", 10],
   ["cfgScaleSpeaker", "参照音声CFG（空欄または0〜10）", 10],
+  // A choice of off and on, not a text field.
+  ["emotionBoost", "感情ブースト", 0],
 ];
 const safe = (value) =>
   String(value)
@@ -106,6 +108,7 @@ export class VoiceDesign {
             ),
           ],
     };
+    if (s.voice.emotionBoost) data.content += "\n感情ブースト：オン";
     if (s.constraints?.fixedSteps != null)
       data.content += "\nSmall-MF：4ステップ固定・CFGは使用しません。";
     if (!s.done && s.audioStatus)
@@ -306,9 +309,11 @@ export class VoiceDesign {
   advancedFields(s) {
     const fields =
       s.constraints?.fixedSteps != null ? advanced.slice(0, 1) : advanced;
+    // A form holds five fields at most: the boost shows only where the keys
+    // shown are chosen, as Mini chooses them without the step count.
     return this.advancedKeys
       ? fields.filter(([key]) => this.advancedKeys.includes(key))
-      : fields;
+      : fields.filter(([key]) => key !== "emotionBoost");
   }
   modal(s, kind) {
     return {
@@ -316,15 +321,32 @@ export class VoiceDesign {
       title: kind === "basic" ? "声の基本設定" : "声の詳細設定",
       components: (kind === "basic" ? basic : this.advancedFields(s)).map(
         ([key, label, max_length]) =>
-          row({
-            type: 4,
-            custom_id: key,
-            label,
-            style: key === "caption" ? 2 : 1,
-            required: !key.startsWith("cfg") && key !== "caption",
-            max_length,
-            value: String(key === "sample" ? s.sample : (s.voice[key] ?? "")),
-          }),
+          key === "emotionBoost"
+            ? {
+                type: 18,
+                label,
+                description:
+                  "オンにすると演技や感情の指示が効きやすくなります。登録した声から少し離れることがあります。",
+                component: {
+                  type: 3,
+                  custom_id: key,
+                  options: [
+                    { label: "オフ", value: "off", default: !s.voice[key] },
+                    { label: "オン", value: "on", default: !!s.voice[key] },
+                  ],
+                },
+              }
+            : row({
+                type: 4,
+                custom_id: key,
+                label,
+                style: key === "caption" ? 2 : 1,
+                required: !key.startsWith("cfg") && key !== "caption",
+                max_length,
+                value: String(
+                  key === "sample" ? s.sample : (s.voice[key] ?? ""),
+                ),
+              }),
       ),
     };
   }
@@ -332,6 +354,13 @@ export class VoiceDesign {
     const voice = structuredClone(s.voice);
     let sample = s.sample;
     for (const [key] of kind === "basic" ? basic : this.advancedFields(s)) {
+      if (key === "emotionBoost") {
+        // Off is no key at all, as a voice made without the boost has none.
+        if (interaction.fields.getStringSelectValues(key)[0] === "on")
+          voice.emotionBoost = true;
+        else delete voice.emotionBoost;
+        continue;
+      }
       const value = interaction.fields.getTextInputValue(key).trim();
       if (key === "sample") sample = value;
       else if (key.startsWith("cfg") && !value) delete voice[key];

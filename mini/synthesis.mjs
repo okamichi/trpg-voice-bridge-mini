@@ -71,10 +71,14 @@ export function shapeSynthesis(fetchImpl, steps = MINI_STEPS) {
     const text = joinShortSentences(body.input);
     if (spoken(text) > SHORT) return request({ input: text });
 
+    // The measuring pass goes in the voice none, which speech.cpp refuses the
+    // reference's settings for: its CFG and the emotion boost's K/V scaling.
     const {
       cfg_scale_speaker,
       cfg_scale_instructions,
       instructions,
+      speaker_kv_scale,
+      speaker_kv_min_t,
       ...plain
     } = body;
     const probe = await fetchImpl(input, {

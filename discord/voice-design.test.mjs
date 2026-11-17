@@ -70,6 +70,7 @@ function setup(t, options = {}) {
     settings: () => settings,
     report: (e) => errors.push(e),
     ttl: options.ttl,
+    advancedKeys: options.advancedKeys,
   });
   engine.chatVoices.designer = {
     enabled: () => settings.enabled,
@@ -143,6 +144,7 @@ function setup(t, options = {}) {
     if (extra.fields)
       i.fields = {
         getTextInputValue: (key) => String(extra.fields[key] ?? ""),
+        getStringSelectValues: (key) => extra.selects?.[key] ?? [],
       };
     await design.handle(i);
     return replies;
@@ -555,4 +557,95 @@ test("MF details offer only seed and ignore stale CFG/steps fields", () => {
   assert.equal(s.voice.seed, "2");
   assert.equal(s.voice.steps, 20);
   assert.equal(s.voice.cfgScaleText, 3);
+});
+
+test("the emotion boost is a choice in Mini's advanced settings; on and off regenerate at once", async (t) => {
+  const keys = [
+    "seed",
+    "cfgScaleText",
+    "cfgScaleCaption",
+    "cfgScaleSpeaker",
+    "emotionBoost",
+  ];
+  const f = setup(t, { advancedKeys: keys }),
+    s = await f.ready(f.send().orderId);
+  const modal = () => f.design.modal(s, "advanced");
+  const boostField = () => modal().components.at(-1);
+  assert.equal(modal().components.length, 5);
+  assert.equal(boostField().component.custom_id, "emotionBoost");
+  assert.deepEqual(
+    boostField().component.options.map((o) => [o.value, o.default]),
+    [
+      ["off", true],
+      ["on", false],
+    ],
+  );
+  const fields = {
+    seed: s.voice.seed,
+    cfgScaleText: "",
+    cfgScaleCaption: "",
+    cfgScaleSpeaker: "",
+  };
+  await f.act(s, "advancedSave", { fields, selects: { emotionBoost: ["on"] } });
+  assert.equal(s.voice.emotionBoost, true);
+  assert.equal(f.generations.length, 2);
+  assert.match(f.design.payload(s).content, /感情ブースト：オン/);
+  assert.deepEqual(
+    boostField().component.options.map((o) => o.default),
+    [false, true],
+  );
+  // Saving it on again changes nothing.
+  await f.act(s, "advancedSave", { fields, selects: { emotionBoost: ["on"] } });
+  assert.equal(f.generations.length, 2);
+  // Off leaves no key, as a voice made without the boost has none.
+  await f.act(s, "advancedSave", {
+    fields,
+    selects: { emotionBoost: ["off"] },
+  });
+  assert.ok(!("emotionBoost" in s.voice));
+  assert.equal(f.generations.length, 3);
+  assert.doesNotMatch(f.design.payload(s).content, /感情ブースト/);
+});
+
+test("without chosen keys, as in Bridge, the advanced settings keep to five fields without the boost", () => {
+  const design = Object.create(VoiceDesign.prototype);
+  const s = {
+    task: { job: { id: "rf" } },
+    version: 0,
+    constraints: { fixedSteps: null, cfg: true },
+    voice: {
+      id: "v",
+      name: "声",
+      provider: "irodori-local",
+      voiceId: "none",
+      caption: "",
+      seed: "1",
+      steps: 20,
+      speed: 1,
+    },
+    sample: "こんにちは",
+  };
+  assert.deepEqual(
+    design
+      .modal(s, "advanced")
+      .components.map((r) => r.components[0].custom_id),
+    ["seed", "steps", "cfgScaleText", "cfgScaleCaption", "cfgScaleSpeaker"],
+  );
+});
+
+test("a design heard with a reference keeps it on confirmation; a voice made from a description registers what was heard", async (t) => {
+  const f = setup(t),
+    s = await f.ready(f.send().orderId);
+  const menu = (await f.act(s, "refs1"))[0];
+  await f.act(s, "refsSelect", {
+    values: [menu.components[0].component.options[4].value],
+  });
+  assert.equal(s.voice.voiceId, "ref-27");
+  await f.act(s, "confirm");
+  await until(() => !f.engine.chatVoices.tasks.size);
+  assert.equal(f.uploads.length, 0, "no new reference is registered");
+  const saved = f.store.config.voiceProfiles.find(
+    (v) => v.id === f.store.config.characters[0].voiceProfileId,
+  );
+  assert.equal(saved.voiceId, "ref-27");
 });
