@@ -163,7 +163,7 @@ function setup(t, options = {}) {
   };
 }
 
-test("VTT starts one post, edits and regenerates in place, confirms exactly the published WAV", async (t) => {
+test("VTT starts one post, saving settings regenerates in place, confirms exactly the published WAV", async (t) => {
   const f = setup(t);
   const job = f.send();
   const s = await f.ready(job.orderId);
@@ -184,9 +184,11 @@ test("VTT starts one post, edits and regenerates in place, confirms exactly the 
       sample: "お待たせしました。",
     },
   });
-  assert.equal(s.dirty, true);
-  assert.equal(s.wav, null);
-  assert.match((await f.act(s, "confirm"))[0].content, /再生成/);
+  // Saving a changed setting makes the candidate again at once.
+  assert.equal(f.generations.length, 2);
+  assert.equal(f.generations[1].input, "お待たせしました。");
+  assert.equal(s.dirty, false);
+  assert.ok(s.published);
   assert.match(
     (await f.act(s, "confirm", { customId: old }))[0].content,
     /古い/,
@@ -203,22 +205,21 @@ test("VTT starts one post, edits and regenerates in place, confirms exactly the 
   assert.equal(s.voice.seed, "9223372036854775807");
   assert.equal(s.voice.cfgScaleText, 2);
   assert.equal(s.voice.cfgScaleCaption, undefined);
-  await f.act(s, "generate");
   const wav = s.wav;
-  assert.equal(f.generations.length, 2);
+  assert.equal(f.generations.length, 3);
   assert.equal(f.posts.length, 1);
   const attached = f.edits.filter((e) => e.files?.length);
-  assert.equal(attached.length, 2);
-  assert.deepEqual(attached[1].files[0].attachment, wav);
-  assert.deepEqual(attached[1].attachments, []);
-  assert.deepEqual(attached[1].allowedMentions, { parse: [] });
+  assert.equal(attached.length, 3);
+  assert.deepEqual(attached[2].files[0].attachment, wav);
+  assert.deepEqual(attached[2].attachments, []);
+  assert.deepEqual(attached[2].allowedMentions, { parse: [] });
   await f.act(s, "confirm");
   await until(() => !f.engine.chatVoices.tasks.size);
   assert.equal(f.uploads.length, 1);
   assert.deepEqual(f.uploads[0], wav);
   assert.equal(f.store.voiceCommands.get(job.orderId).status, "completed");
   assert.ok(f.store.config.characters[0].voiceProfileId);
-  assert.equal(f.generations.length, 2);
+  assert.equal(f.generations.length, 3);
   assert.deepEqual(f.edits.at(-1).components, []);
   assert.equal(f.design.sessions.size, 0);
 });
@@ -246,10 +247,13 @@ test("reference choice pagination and explicit seed editing", async (t) => {
     s = await f.ready(f.send().orderId);
   const menu = (await f.act(s, "refs1"))[0];
   assert.equal(menu.components[0].component.options.length, 6);
+  assert.equal(f.generations.length, 1);
   await f.act(s, "refsSelect", {
     values: [menu.components[0].component.options[4].value],
   });
   assert.equal(s.voice.voiceId, "ref-27");
+  // Choosing a reference makes the candidate with it at once.
+  assert.equal(f.generations.length, 2);
   const seed = s.voice.seed;
   await f.act(s, "advancedSave", {
     fields: {
@@ -260,8 +264,8 @@ test("reference choice pagination and explicit seed editing", async (t) => {
       cfgScaleSpeaker: s.voice.cfgScaleSpeaker ?? "",
     },
   });
-  await f.act(s, "generate");
   assert.notEqual(s.voice.seed, seed);
+  assert.equal(f.generations.length, 3);
   assert.equal(f.posts.length, 1);
   await f.act(s, "cancel");
   await until(() => !f.engine.chatVoices.tasks.size);
@@ -313,10 +317,15 @@ test("attachment upload failure never makes the candidate confirmable; retry can
   );
   const s = f.design.sessions.get(job.orderId);
   assert.equal(s.wav, null);
-  assert.match((await f.act(s, "confirm"))[0].content, /再生成/);
+  const labels = () =>
+    f.design.payload(s).components[1].components.map((b) => b.label);
+  // Only a failed generation offers to generate again.
+  assert.deepEqual(labels(), ["もう一度生成", "この声に決定", "取消"]);
+  assert.match((await f.act(s, "confirm"))[0].content, /音声ができてから/);
   reject = false;
   await f.act(s, "generate");
   assert.ok(s.published);
+  assert.deepEqual(labels(), ["この声に決定", "取消"]);
   await f.act(s, "confirm");
   await until(() => !f.engine.chatVoices.tasks.size);
   assert.equal(f.uploads.length, 1);
@@ -339,8 +348,10 @@ test("cancel during upload leaves the final post disabled and without stale audi
   });
   const s = await f.ready(f.send().orderId);
   block = true;
-  await f.act(s, "advancedSave", { fields: { seed: "2", steps: "20" } });
-  const generating = f.act(s, "generate");
+  // Saving starts the generation whose upload the cancellation overtakes.
+  const generating = f.act(s, "advancedSave", {
+    fields: { seed: "2", steps: "20" },
+  });
   await until(() => started);
   await f.act(s, "cancel");
   release();
@@ -391,14 +402,13 @@ test("voice selectors open cancelable modals without changing a published candid
   assert.equal(s.wav, wav);
 });
 
-test("unchanged settings do not regenerate; seed changes require explicit editing", async (t) => {
+test("unchanged settings do not regenerate; changed settings regenerate at once; seed changes require explicit editing", async (t) => {
   const f = setup(t),
     s = await f.ready(f.send().orderId);
-  const generationButton = () =>
-    f.design.payload(s).components[1].components[0];
-  assert.equal(generationButton().label, "変更を反映して再生成");
-  assert.equal(generationButton().disabled, true);
-  await f.act(s, "generate");
+  const labels = () =>
+    f.design.payload(s).components[1].components.map((b) => b.label);
+  assert.deepEqual(labels(), ["この声に決定", "取消"]);
+  assert.match((await f.act(s, "generate"))[0].content, /変更されていません/);
   assert.equal(f.generations.length, 1);
   const fields = {
     name: s.voice.name,
@@ -406,17 +416,19 @@ test("unchanged settings do not regenerate; seed changes require explicit editin
     speed: String(s.voice.speed),
     sample: s.sample,
   };
+  const edits = f.edits.length;
   await f.act(s, "basicSave", { fields });
   assert.equal(s.dirty, false);
+  assert.equal(f.generations.length, 1);
+  assert.equal(f.edits.length, edits);
+  const seed = s.voice.seed;
   await f.act(s, "basicSave", {
     fields: { ...fields, caption: "もっと落ち着いた声" },
   });
-  assert.equal(generationButton().disabled, false);
-  const seed = s.voice.seed;
-  await f.act(s, "generate");
   assert.equal(s.voice.seed, seed);
   assert.equal(f.generations.length, 2);
-  assert.equal(generationButton().disabled, true);
+  assert.equal(s.dirty, false);
+  assert.deepEqual(labels(), ["この声に決定", "取消"]);
   const voice = structuredClone(s.voice);
   await f.act(s, "advancedSave", {
     fields: {
@@ -427,8 +439,9 @@ test("unchanged settings do not regenerate; seed changes require explicit editin
       cfgScaleSpeaker: s.voice.cfgScaleSpeaker ?? "",
     },
   });
-  await f.act(s, "generate");
   assert.notEqual(s.voice.seed, seed);
+  assert.equal(f.generations.length, 3);
+  assert.equal(f.generations[2].irodori.seed, 2);
   assert.deepEqual({ ...s.voice, seed }, voice);
 });
 

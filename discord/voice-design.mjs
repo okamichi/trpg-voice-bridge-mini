@@ -91,11 +91,11 @@ export class VoiceDesign {
               button(this.id(s, "refs0"), "参照音声", disabled),
             ),
             row(
-              button(
-                this.id(s, "generate"),
-                "変更を反映して再生成",
-                disabled || !s.dirty,
-              ),
+              // Saving a setting regenerates at once; this shows only when
+              // that generation failed, to try it again.
+              ...(s.dirty && !disabled
+                ? [button(this.id(s, "generate"), "もう一度生成", false, 1)]
+                : []),
               button(
                 this.id(s, "confirm"),
                 "この声に決定",
@@ -286,7 +286,7 @@ export class VoiceDesign {
       s.busy = false;
       s.audioStatus = "⚠️ 生成・配信に失敗しました。再試行できます。";
       s.notice =
-        "生成・配信できませんでした。TTSとBotの権限を確認して再生成してください。";
+        "生成・配信できませんでした。TTSとBotの権限を確認して、［もう一度生成］を押してください。";
       this.report(s.notice);
       this.validate(s);
       await this.publish(s, true);
@@ -477,7 +477,7 @@ export class VoiceDesign {
         } else if (action === "confirm") {
           check(
             s.wav && !s.dirty && s.published,
-            "変更した設定で再生成してください",
+            "音声ができてから押してください",
             409,
           );
           s.task.voice = structuredClone(s.voice);
@@ -511,8 +511,9 @@ export class VoiceDesign {
             409,
           );
           this.edit(s, i, action === "basicSave" ? "basic" : "advanced");
-          s.busy = false;
-          await this.publish(s, true);
+          // A changed setting is heard at once; an unchanged one leaves the
+          // published candidate as it is.
+          if (s.dirty) await this.generate(s);
         } else if (action === "voicesSelect" || action === "refsSelect") {
           const value = i.fields.getStringSelectValues("choice")[0];
           if (value === "none") {
@@ -555,8 +556,7 @@ export class VoiceDesign {
           }
           voiceSchema(s.voice);
           this.dirty(s);
-          s.busy = false;
-          await this.publish(s, true);
+          await this.generate(s);
         } else check(false, "未対応の操作です");
         await i.editReply({
           content: "受け付けました。元の声づくりメッセージをご確認ください。",
