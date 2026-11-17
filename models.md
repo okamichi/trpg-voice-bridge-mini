@@ -2,20 +2,20 @@
 
 TRPG Voice Bridge Miniには、音声モデル「Irodori-TTS-v4.1-Small」のQ4_Kの量子化モデルが入っており、このモデルを利用するように固定化されています。あなたの環境に応じて、このほかに、次のモデルも利用できます。
 
-| モデル                     | どんなモデルか                                                                                                                                                 | ファイルの大きさ | ライセンス                                              | 用意のしかた                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
-| Irodori-TTS-v4.1-Small     | Miniに入っているモデル                                                                                                                                         | 0.86GB           | MIT                                                     | 用意は要りません                                              |
-| Irodori-TTS-v4.1-Anime     | Smallを、アニメ調の話し方の音声で追加学習したモデル                                                                                                            | 0.86GB（Q4_K）   | MIT                                                     | スクリプトで作ります（[1](#1-anime版とsun版を作る)）          |
-| Irodori-TTS-v4.1-Small-SUN | Smallを、漢字をより正しく読むように追加学習したモデル（[Irodori-TTS-v4.1-Small-Yomi](https://huggingface.co/takuma104/Irodori-TTS-v4.1-Small-Yomi)と同じもの） | 0.86GB（Q4_K）   | MIT                                                     | スクリプトで作ります（[1](#1-anime版とsun版を作る)）          |
-| Irodori-TTS-v4-Large       | Smallの約4倍の大きさのモデル。声の説明や元の音声によく従います。そのかわり、漢字の読みは少し不正確で、音声を作るのに2〜4倍かかります                           | 2.62GB（Q4_K）～ | [Gemma Terms of Use](https://ai.google.dev/gemma/terms) | Miniでダウンロードします（[2](#2-large版をダウンロードする)） |
+| モデル                      | どんなモデルか                                                                                                                       | ファイルの大きさ | ライセンス                                              | 用意のしかた                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
+| Irodori-TTS-v4.1-Small      | Miniに入っているモデル                                                                                                               | 0.86GB           | MIT                                                     | 用意は要りません                                              |
+| Irodori-TTS-v4.1-Anime      | Smallを、アニメ調の話し方の音声で追加学習したモデル                                                                                  | 0.86GB（Q4_K）   | MIT                                                     | スクリプトで作ります（[1](#1-anime版とyomi版を作る)）         |
+| Irodori-TTS-v4.1-Small-Yomi | Smallを、漢字をより正しく読むように追加学習したモデル                                                                                | 0.86GB（Q4_K）   | MIT                                                     | スクリプトで作ります（[1](#1-anime版とyomi版を作る)）         |
+| Irodori-TTS-v4-Large        | Smallの約4倍の大きさのモデル。声の説明や元の音声によく従います。そのかわり、漢字の読みは少し不正確で、音声を作るのに2〜4倍かかります | 2.62GB（Q4_K）～ | [Gemma Terms of Use](https://ai.google.dev/gemma/terms) | Miniでダウンロードします（[2](#2-large版をダウンロードする)） |
 
 用意したモデルは、起動するときに指定します（[3](#3-モデルを指定して起動する)）。指定しなければ、いつもどおりSmallで起動します。
 
-## 1. Anime版とSUN版を作る
+## 1. Anime版とYomi版を作る
 
-Anime版とSUN版は、Miniで使える形式（GGUF）では公開されていません。そこで、公開されているモデルのファイルを、スクリプトでGGUFに変換します。どちらも同じスクリプトで、作るときにどちらかを選びます。
+Anime版とYomi版は、Miniで使える形式（GGUF）では公開されていません。そこで、公開されているモデルのファイルを、スクリプトでGGUFに変換します。どちらも同じスクリプトで、作るときにどちらかを選びます。
 
-SUN版は、[takuma104/Irodori-TTS-v4.1-Small-Yomi](https://huggingface.co/takuma104/Irodori-TTS-v4.1-Small-Yomi) とまったく同じ中身のモデルです。Yomi版のモデルカードにある、Smallが読み間違える例文5つを読ませたところ、SUN版では5つとも正しい読みになりました。SUN版のモデルカードにある速さ（2.67倍）は、別のプログラム（PyTorch）をCPUで動かしたときの値で、Miniでは速さもメモリもSmallと同じです。
+Yomi版は、Smallを、漢字をより正しく読むように追加学習したモデルです。音読みと訓読みの取り違えや、あまり使われない語の読み間違いが減ります。Yomi版のモデルカードにある、Smallが読み間違える例文5つを読ませたところ、Yomi版では5つとも正しい読みになりました。速さとメモリはSmallと同じです。
 
 ### 必要なもの
 
@@ -53,21 +53,21 @@ SUN版は、[takuma104/Irodori-TTS-v4.1-Small-Yomi](https://huggingface.co/takum
 ```text
 どのモデルを作りますか？
   1) Anime（アニメ調の話し方）
-  2) SUN（漢字の読みを改善）
+  2) Yomi（漢字の読みを改善）
 番号>
 ```
 
 「1/4」から「4/4」まで順に進み、「できました」と表示されたら完成です。Miniのフォルダに、次のファイルができています。Windowsでは、何かキーを押すと画面が閉じます。
 
 - Anime版：`Irodori-TTS-859M-Anime-v4.1-Q4_K.gguf`
-- SUN版：`Irodori-TTS-859M-SUN-v4.1-Q4_K.gguf`
+- Yomi版：`Irodori-TTS-859M-Yomi-v4.1-Q4_K.gguf`
 
 - 時間の大半はダウンロードです。
 - 途中で止まったときは、もう一度同じように実行します。済んだところから続けます。
 - 作業用のファイルは、Miniのフォルダの中の `work` フォルダにまとめて置き、できあがったら `work` ごと消します。パソコンのほかの場所には何も入れません。
 - 作業の中身は次のとおりです。
   1. 変換に使うPythonと、そのパッケージ（numpy、safetensors、gguf、pyyaml）を `work` に入れます。
-  2. モデルのファイルをダウンロードします。Anime版は [phasefield-audio/Irodori-TTS-v4.1-Anime](https://huggingface.co/phasefield-audio/Irodori-TTS-v4.1-Anime) から、SUN版は [summerAIO/Irodori-TTS-v4.1-Small-SUN](https://huggingface.co/summerAIO/Irodori-TTS-v4.1-Small-SUN) から取ります。SUN版のリポジトリにはトークナイザー（文字を区切るための辞書）がないので、それだけは [Aratako/Irodori-TTS-v4.1-Small](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small) から取ります。
+  2. モデルのファイルをダウンロードします。Anime版は [phasefield-audio/Irodori-TTS-v4.1-Anime](https://huggingface.co/phasefield-audio/Irodori-TTS-v4.1-Anime) から、Yomi版は [takuma104/Irodori-TTS-v4.1-Small-Yomi](https://huggingface.co/takuma104/Irodori-TTS-v4.1-Small-Yomi) から取ります。
   3. GGUF（F32）に変換します。Smallと共通の部分（音声コーデックなど）は、Miniに入っているSmallのファイルから取ります。
   4. Miniに入っている音声生成のプログラムで、Q4_Kに量子化します。
 
@@ -78,11 +78,11 @@ SUN版は、[takuma104/Irodori-TTS-v4.1-Small-Yomi](https://huggingface.co/takum
 - macOS：`sh make-model.sh --type q8_0`
 - Windows：Miniのフォルダでコマンドプロンプトを開き、`make-model.bat --type q8_0`
 
-`--model anime` か `--model sun` を付けると、どちらを作るかを聞かれずに始まります（例：`sh make-model.sh --model sun --type q8_0`）。
+`--model anime` か `--model yomi` を付けると、どちらを作るかを聞かれずに始まります（例：`sh make-model.sh --model yomi --type q8_0`）。
 
 Windowsでコマンドプロンプトを開くには、エクスプローラーでMiniのフォルダを開き、上のアドレス欄に `cmd` と入力してEnterを押します。そのフォルダで開いた状態になります。
 
-できるファイルの名前は、`Irodori-TTS-859M-SUN-v4.1-Q8_0.gguf` のように種類の名前が入ります。
+できるファイルの名前は、`Irodori-TTS-859M-Yomi-v4.1-Q8_0.gguf` のように種類の名前が入ります。
 
 ## 2. Large版をダウンロードする
 
@@ -133,8 +133,8 @@ Large版は、音声を作るときのメモリも多く使います。同じセ
 # Anime版
 TRPG_VOICE_BRIDGE_MINI_MODEL=./Irodori-TTS-859M-Anime-v4.1-Q4_K.gguf ./trpg-voice-bridge-mini
 
-# SUN版
-TRPG_VOICE_BRIDGE_MINI_MODEL=./Irodori-TTS-859M-SUN-v4.1-Q4_K.gguf ./trpg-voice-bridge-mini
+# Yomi版
+TRPG_VOICE_BRIDGE_MINI_MODEL=./Irodori-TTS-859M-Yomi-v4.1-Q4_K.gguf ./trpg-voice-bridge-mini
 
 # Large版
 TRPG_VOICE_BRIDGE_MINI_MODEL=./models/sakasegawa--Irodori-TTS-v4-Large-GGUF/ac3e473f393b620c108c18ba848c337abb6d2348844da90c8b291812dd96bd6e/Irodori-TTS-3.4B-v4-Q4_K.gguf ./trpg-voice-bridge-mini
@@ -149,8 +149,8 @@ trpg-voice-bridge-mini.exe
 ```
 
 ```bat
-rem SUN版
-set TRPG_VOICE_BRIDGE_MINI_MODEL=.\Irodori-TTS-859M-SUN-v4.1-Q4_K.gguf
+rem Yomi版
+set TRPG_VOICE_BRIDGE_MINI_MODEL=.\Irodori-TTS-859M-Yomi-v4.1-Q4_K.gguf
 trpg-voice-bridge-mini.exe
 ```
 
@@ -165,13 +165,13 @@ trpg-voice-bridge-mini.exe
 - 指定が効くのは、その起動のときだけです。次にふつうに起動すると、Smallに戻ります。Windowsの `set` は、そのコマンドプロンプトの画面を閉じるまで効きます。
 - ファイルが見つからないときは、「音声モデルが見つかりません」と表示して起動しません。
 - 起動オプション（`--steps` など）も、いつもどおり付けられます。
-- キャラと声の登録（`data` フォルダ）は、モデルを替えてもそのまま使えます。登録した声の元になる音声は、Anime版・SUN版・Large版でも読み上げに使えます。
+- キャラと声の登録（`data` フォルダ）は、モデルを替えてもそのまま使えます。登録した声の元になる音声は、Anime版・Yomi版・Large版でも読み上げに使えます。
 
 ## 注意
 
 - モデルのライセンスと利用上の制限（モデルカードの記載）に従ってください。
   - Anime版：MITライセンスで、Smallと同じ利用上の制限があります（[モデルカード](https://huggingface.co/phasefield-audio/Irodori-TTS-v4.1-Anime)）。
-  - SUN版：MITライセンスです（[モデルカード](https://huggingface.co/summerAIO/Irodori-TTS-v4.1-Small-SUN)）。
+  - Yomi版：MITライセンスです（[モデルカード](https://huggingface.co/takuma104/Irodori-TTS-v4.1-Small-Yomi)）。
   - Large版：[Gemma Terms of Use](https://ai.google.dev/gemma/terms) です（[モデルカード](https://huggingface.co/Aratako/Irodori-TTS-v4-Large)）。
 - Anime版のモデルカードには、声の説明と絵文字の効き方がSmallと違う場合がある、と書かれています。Miniの声の説明や、（怒り）などの演技の指示の効き方が変わることがあります。
 - 音声を作るときのステップ数（最初は12）は、Smallで聴き比べて決めた値です。ほかのモデルで聞こえ方が気になるときは、`--steps` で変えてみてください。

@@ -1,5 +1,5 @@
 """Makes a fine-tune of the model TRPG Voice Bridge Mini carries, Irodori-TTS-v4.1-Small, into a GGUF file in Mini's
-folder: Irodori-TTS-v4.1-Anime or Irodori-TTS-v4.1-Small-SUN.
+folder: Irodori-TTS-v4.1-Anime or Irodori-TTS-v4.1-Small-Yomi.
 
 make-model.sh (macOS) and make-model.bat (Windows) fetch uv into work/ and run this file with a Python that uv installs
 there. It asks which model to make unless --model names it, installs the four Python packages the conversion needs,
@@ -8,7 +8,7 @@ official runtime's defaults, which the fine-tunes share with Irodori-TTS-v4.1-Sm
 carries, so neither PyTorch nor the codec's weights are fetched. Everything but the result goes into work/. The
 launcher removes work/ once the file is made; after a failure it stays, and running again resumes.
 
-usage: make_model.py [--model anime|sun] [--type q4_k|q5_k|q6_k|q8_0|f16] [--keep-work]
+usage: make_model.py [--model anime|yomi] [--type q4_k|q5_k|q6_k|q8_0|f16] [--keep-work]
 """
 
 import argparse
@@ -32,7 +32,7 @@ CURL = Path(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "curl.exe")
 SMALL = {"file": "Irodori-TTS-859M-v4.1-Q4_K.gguf", "size": 859871072,
          "sha256": "a1c174f4552817e84dd6a2a020bc3d0589fd7f30d0c3db53ad04a1e69fb5dbfd"}
 # The models this makes: the repository and revision of each, the word for it in the GGUF file's name, and the files
-# the conversion reads, each with its size and SHA-256 and, when another repository holds it, that one.
+# the conversion reads, each with its size and SHA-256.
 TOKENIZER = {"tokenizer/tokenizer.json": (6718495, "6a0734cf21c802169defaffe719bc2ef12bb9d0be37e54b61ed27aa89394723d"),
              "tokenizer/tokenizer_config.json": (668, "d229a271c64de1a7939d20d3665498e873fa91d5ee2edf135d73ec752cb9c9d3")}
 MODELS = {
@@ -45,16 +45,14 @@ MODELS = {
                                               "5630aa0a661930ff678a1d1f1893876e24520f4776d4fcc25ca54e6ab9f41f37"),
                         "README.md": (1011, "28bd916a1312c4da901cfaf5bb4476cad5b9b21595e6514b2326707e8c82d773"),
                         **TOKENIZER}},
-    # The weights of takuma104/Irodori-TTS-v4.1-Small-Yomi, which reads kanji more accurately. Its repository holds no
-    # tokenizer; the one of Irodori-TTS-v4.1-Small, its base, is the same files as Anime's.
-    "sun": {"label": "SUN（漢字の読みを改善）", "finetune": "SUN",
-            "repository": "summerAIO/Irodori-TTS-v4.1-Small-SUN",
-            "revision": "a68be741b6631186ce2b4e60ce6432dd8d920558",
-            "files": {"model.safetensors": (3064295596,
-                                            "af9bbab351046c5320b71add301b425d367d9a2c6d6828f426ee3156cf785215"),
-                      "README.md": (5781, "87e25de8f85d0fe42221f390b46dfa3ac1443f47218482949f2b9f62e187fb03"),
-                      **{name: (*check, ("Aratako/Irodori-TTS-v4.1-Small", "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b"))
-                         for name, check in TOKENIZER.items()}}},
+    # A fine-tune that reads kanji more accurately; summerAIO/Irodori-TTS-v4.1-Small-SUN holds the same weights.
+    "yomi": {"label": "Yomi（漢字の読みを改善）", "finetune": "Yomi",
+             "repository": "takuma104/Irodori-TTS-v4.1-Small-Yomi",
+             "revision": "a877b9effcc0d6783784150b12f960f1f573e3e3",
+             "files": {"model.safetensors": (3064295596,
+                                             "af9bbab351046c5320b71add301b425d367d9a2c6d6828f426ee3156cf785215"),
+                       "README.md": (15531, "cdc2ee4c702cbd65ccff5523d34c3e7b249f7e1ca739968d425f3ff687fd0d66"),
+                       **TOKENIZER}},
 }
 # The packages the conversion imports, at the versions of the uv.lock of speech.cpp's converter (reference/irodori-tts
 # at the commit below), with the hashes of their wheels for Python 3.10 on macOS (Apple Silicon) and Windows (x64).
@@ -129,7 +127,7 @@ def convert(key, checkpoint_dir, small_path, out_dir):
     text_config = json.loads(checkpoint.metadata()["text_encoder_config_json"])
     assert config["text_encoder_type"] == "pretrained" and text_config["model_type"] == "modernbert"
     assert config["pretrained_projector_type"] == "residual_mlp" and config["latent_patch_size"] == 1
-    # convert.py takes any flow but MeanFlow for rectified flow; SUN's checkpoint names none (null).
+    # convert.py takes any flow but MeanFlow for rectified flow; Yomi's checkpoint names none (null).
     assert config.get("flow_parameterization", "rf_velocity") != "meanflow"
     assert small_value(arch + ".flow") == "rf_velocity"
     with open(os.path.join(checkpoint_dir, "README.md"), encoding="utf-8") as f:
@@ -537,9 +535,9 @@ def main():
     total = sum(check[0] for check in model["files"].values())
     print(f"2/4 {name}版のチェックポイントをダウンロードします（{gb(total)}）", flush=True)
     checkpoint = WORK / key
-    for file, (size, sha256, *source) in model["files"].items():
-        repository, revision = source[0] if source else (model["repository"], model["revision"])
-        download(f"https://huggingface.co/{repository}/resolve/{revision}/{file}", checkpoint / file, size, sha256)
+    for file, (size, sha256) in model["files"].items():
+        download(f"https://huggingface.co/{model['repository']}/resolve/{model['revision']}/{file}",
+                 checkpoint / file, size, sha256)
 
     print("3/4 F32のGGUFに変換します", flush=True)
     if not f32.exists():

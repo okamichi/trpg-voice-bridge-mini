@@ -3,9 +3,9 @@ setlocal
 for /f "tokens=2 delims=:." %%c in ('chcp') do set "OLDCP=%%c"
 chcp 65001 >nul
 rem
-rem 「Irodori-TTS-v4.1-Anime」か「Irodori-TTS-v4.1-Small-SUN」のGGUFファイルを取得・変換するスクリプト。
+rem 「Irodori-TTS-v4.1-Anime」か「Irodori-TTS-v4.1-Small-Yomi」のGGUFファイルを取得・変換するスクリプト。
 rem 実行すると、どちらを作るかを番号で選ぶ。最初から指定する場合は：
-rem make-model.bat --model sun
+rem make-model.bat --model yomi
 rem 量子化 Q4_K以外のタイプの場合は：
 rem make-model.bat --type q8_0
 rem

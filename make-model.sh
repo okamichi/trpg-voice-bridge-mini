@@ -1,8 +1,8 @@
 #!/bin/sh
 # 
-# 「Irodori-TTS-v4.1-Anime」か「Irodori-TTS-v4.1-Small-SUN」のGGUFファイルを取得・変換するスクリプト。
+# 「Irodori-TTS-v4.1-Anime」か「Irodori-TTS-v4.1-Small-Yomi」のGGUFファイルを取得・変換するスクリプト。
 # 実行すると、どちらを作るかを番号で選ぶ。最初から指定する場合は：
-# ./make-model.sh --model sun
+# ./make-model.sh --model yomi
 # 量子化 Q4_K以外のタイプの場合は：
 # ./make-model.sh --type q8_0
 #
