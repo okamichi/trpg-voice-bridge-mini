@@ -13,7 +13,7 @@ VTT（オンラインセッションツール）のチャットにキャラと�
 - `（怒り）` や `😲` のように書くと、感情や演技を付けられる
 - 音声は自分のパソコンの中で作るので、外部の音声サービスを使わない
 
-https://github.com/user-attachments/assets/670b5389-b0c3-43a8-a3ce-7df769729ce3
+https://github.com/user-attachments/assets/672ce333-b199-4ccb-b999-4517619dcadc
 
 ## 必要なもの
 
